@@ -105,6 +105,40 @@ python -m src.cli --config config.yaml --quotes-file your_paper_quotes.json path
 - `--progress/--no-progress`: Show or hide per-file progress updates (default: shown)
 - `--quotes-file`: Path to JSON quotes file to annotate without rerunning extraction
 
+## Customizing Prompts
+
+PaperFlux uses three editable Jinja2 templates in the `prompts/` directory to control how the AI extracts and summarizes information:
+
+### `rag_category_system_prompt.txt`
+
+The system prompt that instructs the AI assistant on its role and behavior. It defines the extraction rules:
+- Use RAG file_search to find relevant passages
+- Extract near-verbatim quotations with accurate page numbers
+- Avoid including section/table/figure references in quotes
+- Return structured JSON without code fences
+
+This is the "personality" of the extraction assistant.
+
+### `rag_category_prompt.j2`
+
+The user prompt template for category extraction. It:
+- Lists all extraction categories (contributions, limitations, claims, evidence) with their descriptions
+- Specifies the JSON output format with categories, quotes, pages, and category summaries
+- Gets rendered with variables from `config.yaml` (categories list)
+
+Edit `config.yaml` (under `extraction_categories`) to change what categories are extracted. Edit this template to modify the output structure or instructions.
+
+### `rag_summary_prompt.j2`
+
+The prompt template for generating the final Markdown summary. It:
+- Receives all category summaries as input
+- Uses the detail level (low/medium/high) to control summary length
+- Produces a cohesive narrative summary integrating all categories
+
+Edit this to change how the final summary is structured or what information it emphasizes.
+
+All three templates can be customized without modifying any Python code—just edit the files in `prompts/` and rerun PaperFlux.
+
 ## Brief History
 
 - v1.0.20250525: Initial version using local text extraction, LLM-based processing of extracted text, and fuzzy quote matching for PDF annotation.
