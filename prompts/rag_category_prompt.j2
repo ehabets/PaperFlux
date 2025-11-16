@@ -1,0 +1,18 @@
+Analyze the paper for the following categories and produce structured evidence:
+
+{% for cat in categories -%}
+- {{ cat.name }}: {{ cat.description }}
+{% endfor %}
+
+Return one JSON object (no code fences or commentary) like:
+{
+  "categories": [
+    {
+      "name": "<category_name>",
+      "quotes": [
+        {"text": "...", "pages": [1, 2]}
+      ],
+      "category_summary": "..."
+    }
+  ]
+}

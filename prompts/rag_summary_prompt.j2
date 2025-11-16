@@ -1,0 +1,7 @@
+Write a {{ detail_level }}-detail Markdown summary of the scientific paper, integrating the information from all category summaries below.
+
+Category Summaries:
+{% for category, summary in category_summaries.items() %}- {{ category }}: {{ summary }}
+{% endfor %}
+
+Return only the Markdown summary text.

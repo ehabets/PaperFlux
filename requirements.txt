@@ -1,0 +1,9 @@
+openai>=2.0.1
+typer[all]>=0.15.4
+PyMuPDF>=1.24
+pyyaml>=6.0
+pydantic>=2.7
+rich>=13.7
+pytest>=8.2
+python-dotenv>=1.0.0
+jinja2>=3.1
