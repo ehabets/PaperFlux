@@ -1,1 +1,1 @@
-"""Paper-scribe package."""
+"""PaperFlux package."""
