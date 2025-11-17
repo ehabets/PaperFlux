@@ -20,7 +20,7 @@ PaperFlux helps you read scientific papers faster by automatically extracting ex
 - Batch CLI: [options] *.pdf
 - YAML config with LLMs, prompts, colors, defaults
 - Three detail levels (low / medium / high)
-- Assistants-driven RAG retrieval/summary pipeline
+- RAG retrieval and summarization pipeline
 - User-editable prompt templates (Jinja2)
 - RGB highlight colors editable in config
 - Optional output directory for generated artifacts
@@ -38,7 +38,6 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
-pytest -q
 ```
 
 ### 2. Configure the API Key
@@ -91,7 +90,7 @@ Choose one of the following setups:
 Run the CLI:
 
 ```bash
-python -m src.cli --config config.yaml --verbose path/to/your.pdf
+python -m src.cli --config config.yaml path/to/your.pdf
 # or reuse prior quotes without extraction
 python -m src.cli --config config.yaml --quotes-file your_paper_quotes.json path/to/your.pdf
 ```
