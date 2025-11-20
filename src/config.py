@@ -102,7 +102,12 @@ def _expand_env_vars(value: str) -> str:
     """Expand environment variables in string values."""
     if isinstance(value, str) and value.startswith("ENV:"):
         env_var = value[4:]
-        return os.environ.get(env_var, "")
+        if env_var not in os.environ:
+            raise ValueError(
+                f"Environment variable '{env_var}' referenced in the configuration is not set. "
+                "Set it (e.g., export OPENAI_API_KEY=...) or replace the config value."
+            )
+        return os.environ[env_var]
     return value
 
 
