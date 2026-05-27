@@ -7,10 +7,12 @@ def test_config_parse(tmp_path):
     config_content = """
 openai:
   api_key: "testkey"
-  model: "gpt-5-mini"
+  model: "gpt-5.4-mini"
 
 ui:
   detail_level: "medium"
+  reasoning_effort: "low"
+  max_output_tokens: 32768
   highlight_colors:
     contributions: [1.0, 1.0, 0.0]
     limitations:   [1.0, 0.6, 0.0]
@@ -25,6 +27,7 @@ rag:
   category_prompt_file: "prompts/rag_category_prompt.j2"
   summary_prompt_file: "prompts/rag_summary_prompt.j2"
   max_num_results: 7
+  max_quotes_per_category: 5
   stream: true
 """
     config_file = tmp_path / "config.yaml"
@@ -36,14 +39,17 @@ rag:
     # Assert values
     assert isinstance(cfg, Config)
     assert cfg.openai.api_key == "testkey"
-    assert cfg.openai.model == "gpt-5-mini"
+    assert cfg.openai.model == "gpt-5.4-mini"
     assert cfg.ui.detail_level == "medium"
+    assert cfg.ui.reasoning_effort == "low"
+    assert cfg.ui.max_output_tokens == 32768
     assert cfg.ui.highlight_colors["contributions"] == [1.0, 1.0, 0.0]
     assert cfg.matching.token.per_line is True
     assert cfg.matching.token.per_line is True
     assert cfg.rag.category_prompt_file == "prompts/rag_category_prompt.j2"
     assert cfg.rag.summary_prompt_file == "prompts/rag_summary_prompt.j2"
     assert cfg.rag.max_num_results == 7
+    assert cfg.rag.max_quotes_per_category == 5
     assert cfg.rag.stream is True
 
 
@@ -51,7 +57,7 @@ def test_missing_highlight_colors(tmp_path):
     config_content = """
 openai:
   api_key: "testkey"
-  model: "gpt-5-mini"
+  model: "gpt-5.4-mini"
 
 ui:
   detail_level: "medium"

@@ -25,7 +25,7 @@ def _build_text_payload(format_payload: dict, verbosity: str) -> dict:
     return {"format": format_payload, "verbosity": verbosity}
 
 
-def _multi_category_schema() -> dict:
+def _multi_category_schema(max_quotes_per_category: int) -> dict:
     schema = {
         "type": "object",
         "additionalProperties": False,
@@ -39,6 +39,7 @@ def _multi_category_schema() -> dict:
                         "name": {"type": "string"},
                         "quotes": {
                             "type": "array",
+                            "maxItems": max_quotes_per_category,
                             "items": {
                                 "type": "object",
                                 "additionalProperties": False,
@@ -94,7 +95,8 @@ def _ensure_response_completed(resp: Any, context: str, max_output_tokens: int) 
         raise ValueError(
             f"{context} response ended with status='{status}' (reason='{reason}'). "
             f"Consider increasing ui.max_output_tokens (currently {max_output_tokens}) "
-            "or lowering detail_level / category count."
+            "or lowering ui.reasoning_effort, detail_level, category count, or "
+            "rag.max_quotes_per_category."
         )
 
 
@@ -165,7 +167,13 @@ async def analyze_pdf(path: Path, cfg: Config) -> dict:
     client_sync = OpenAI(api_key=cfg.openai.api_key)
 
     # 1) Create vector store and upload PDF
-    vector_store = client_sync.vector_stores.create(name="PaperFlux Vector Store")
+    vector_store = client_sync.vector_stores.create(
+        name="PaperFlux Vector Store",
+        expires_after={
+            "anchor": "last_active_at",
+            "days": cfg.rag.vector_store_expires_after_days,
+        },
+    )
     with open(path, "rb") as f:
         client_sync.vector_stores.files.upload_and_poll(
             vector_store_id=vector_store.id,
@@ -183,14 +191,20 @@ async def analyze_pdf(path: Path, cfg: Config) -> dict:
         {"name": cat, "description": desc}
         for cat, desc in categories.items()
     ]
-    user_msg = category_template.render(categories=category_entries)
+    user_msg = category_template.render(
+        categories=category_entries,
+        max_quotes_per_category=cfg.rag.max_quotes_per_category,
+    )
 
-    tools = [{
+    file_search_tool = {
         "type": "file_search",
         "vector_store_ids": [vector_store.id],
-    }]
+    }
+    if cfg.rag.max_num_results is not None:
+        file_search_tool["max_num_results"] = cfg.rag.max_num_results
+    tools = [file_search_tool]
 
-    schema = _multi_category_schema()
+    schema = _multi_category_schema(cfg.rag.max_quotes_per_category)
     text_payload = _build_text_payload(
         {
             "type": "json_schema",
@@ -214,6 +228,8 @@ async def analyze_pdf(path: Path, cfg: Config) -> dict:
         "tool_choice": {"type": "file_search"},
         "store": False,
     }
+    if cfg.rag.include_search_results:
+        kwargs["include"] = ["file_search_call.results"]
     kwargs["reasoning"] = reasoning_payload
     multi_resp = await client_async.responses.create(**kwargs)
     _ensure_response_completed(multi_resp, "Category bundle", cfg.ui.max_output_tokens)

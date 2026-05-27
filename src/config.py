@@ -26,9 +26,9 @@ class OpenAIConfig(BaseModel):
 class UIConfig(BaseModel):
     """UI configuration."""
     detail_level: Literal["low", "medium", "high"] = "medium"
-    reasoning_effort: Literal["none", "low", "medium", "high"] = "medium"
+    reasoning_effort: Literal["none", "low", "medium", "high", "xhigh"] = "medium"
     verbosity: Literal["low", "medium", "high"] = "medium"
-    max_output_tokens: int = 4096
+    max_output_tokens: int = 32768
     highlight_colors: Dict[str, List[float]] = Field(
         default_factory=lambda: {
             "contributions": [1.0, 1.0, 0.0],  # Yellow
@@ -67,6 +67,11 @@ class RagConfig(BaseModel):
     category_prompt_file: str = "prompts/rag_category_prompt.j2"
     summary_prompt_file: str = "prompts/rag_summary_prompt.j2"
     category_system_prompt_file: str = "prompts/rag_category_system_prompt.txt"
+    max_num_results: Optional[int] = Field(default=None, ge=1)
+    max_quotes_per_category: int = Field(default=8, ge=1)
+    include_search_results: bool = False
+    stream: bool = False
+    vector_store_expires_after_days: int = Field(default=1, ge=1)
 
 class Config(BaseModel):
     """Main configuration."""
@@ -86,16 +91,16 @@ class Config(BaseModel):
         return required - defined
 
     @model_validator(mode="after")
-    def validate_highlight_colors(cls, values: "Config") -> "Config": # pylint: disable=no-self-argument
+    def validate_highlight_colors(self) -> "Config":
         """Ensure every category has a highlight color defined."""
-        ui_cfg: UIConfig = values.ui
-        categories_cfg: ExtractionCategoriesConfig = values.extraction_categories
-        missing = cls._missing_highlight_categories(ui_cfg.highlight_colors, categories_cfg.categories)
+        ui_cfg: UIConfig = self.ui
+        categories_cfg: ExtractionCategoriesConfig = self.extraction_categories
+        missing = self._missing_highlight_categories(ui_cfg.highlight_colors, categories_cfg.categories)
         if missing:
             raise ValueError(
                 "Highlight colors missing for categories: " + ", ".join(sorted(missing))
             )
-        return values
+        return self
 
 
 def _expand_env_vars(value: str) -> str:
@@ -134,12 +139,12 @@ def load(config_path: Union[str, Path]) -> Config:
     config_path = Path(config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
-    
+
     with open(config_path, "r") as f:
         config_dict = yaml.safe_load(f)
-    
+
     # Process environment variables
     config_dict = _process_config_dict(config_dict)
-    
+
     # Convert to Pydantic model
     return Config(**config_dict)

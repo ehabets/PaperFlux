@@ -138,6 +138,31 @@ Edit this to change how the final summary is structured or what information it e
 
 All three templates can be customized without modifying any Python code—just edit the files in `prompts/` and rerun PaperFlux.
 
+## OpenAI Model and Retrieval Settings
+
+The default model is `gpt-5.4-mini`, which supports the Responses API, structured outputs, and file search. You can change it in `config.yaml`:
+
+```yaml
+openai:
+  model: "gpt-5.4-mini"
+```
+
+File-search retrieval can also be tuned without changing Python code:
+
+```yaml
+ui:
+  reasoning_effort: "low"
+  max_output_tokens: 32768
+
+rag:
+  max_num_results:        # leave empty to let OpenAI choose
+  max_quotes_per_category: 6
+  include_search_results: false
+  vector_store_expires_after_days: 1
+```
+
+Use `max_num_results` to cap retrieved passages when latency or cost matters. Use `max_quotes_per_category` to keep the structured JSON response bounded. Enabling `include_search_results` is useful for debugging retrieval, but it increases the response payload.
+
 ## Brief History
 
 - v1.0.20250525: Initial version using local text extraction, LLM-based processing of extracted text, and fuzzy quote matching for PDF annotation.
@@ -146,6 +171,7 @@ All three templates can be customized without modifying any Python code—just e
 - v2.2.20251115: Added n-gram quote matching for improved PDF annotation.
 - v3.0.20251116: Added token-based quote matching for improved PDF annotation. Removed fuzzy- and n-gram-based matching.
 - v3.1.20251116: Introduced a `--quotes-file` flow to re-annotate quickly without re-running extraction.
+- v3.2.20260527: Updated default model to GPT-5.4 mini and added file-search tuning options.
 
 ## Contributing
 

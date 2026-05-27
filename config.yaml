@@ -1,10 +1,11 @@
 openai:
   api_key: "ENV:OPENAI_API_KEY"
-  model: "gpt-5-mini-2025-08-07"
+  model: "gpt-5.4-mini"
 
 ui:
   detail_level: "medium"
-  max_output_tokens: 8192
+  reasoning_effort: "medium"
+  max_output_tokens: 32768
   highlight_colors: # Ensure these keys match the default keys in extraction_categories or are updated by user
     contributions: [1.0, 1.0, 0.0]
     limitations:   [1.0, 0.6, 0.0]
@@ -30,3 +31,4 @@ matching:
 rag:
   category_prompt_file: "prompts/rag_category_prompt.j2"
   summary_prompt_file: "prompts/rag_summary_prompt.j2"
+  max_quotes_per_category: 6
