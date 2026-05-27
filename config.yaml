@@ -25,10 +25,12 @@ extraction_categories:
     # future_work: "Suggestions or plans for future research directions, open questions, or potential extensions of the current work as stated by the authors."
 
 matching:
+  min_similarity: 0.88
+  max_window_tokens: 80
   token:
     per_line: false
 
 rag:
   category_prompt_file: "prompts/rag_category_prompt.j2"
   summary_prompt_file: "prompts/rag_summary_prompt.j2"
-  max_quotes_per_category: 6
+  max_quotes_per_category: 8

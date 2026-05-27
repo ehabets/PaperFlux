@@ -60,6 +60,8 @@ class TokenMatchingConfig(BaseModel):
 class MatchingConfig(BaseModel):
     """Quote matching configuration."""
     token: TokenMatchingConfig = Field(default_factory=TokenMatchingConfig)
+    min_similarity: float = Field(default=0.88, ge=0.0, le=1.0)
+    max_window_tokens: int = Field(default=80, ge=8)
 
 class RagConfig(BaseModel):
     """RAG assistant specific configuration."""
@@ -68,7 +70,7 @@ class RagConfig(BaseModel):
     summary_prompt_file: str = "prompts/rag_summary_prompt.j2"
     category_system_prompt_file: str = "prompts/rag_category_system_prompt.txt"
     max_num_results: Optional[int] = Field(default=None, ge=1)
-    max_quotes_per_category: int = Field(default=8, ge=1)
+    max_quotes_per_category: int = Field(default=6, ge=1)
     include_search_results: bool = False
     stream: bool = False
     vector_store_expires_after_days: int = Field(default=1, ge=1)

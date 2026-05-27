@@ -49,8 +49,10 @@ def _multi_category_schema(max_quotes_per_category: int) -> dict:
                                         "type": "array",
                                         "items": {"type": "integer", "minimum": 1},
                                     },
+                                    "prefix": {"type": "string"},
+                                    "suffix": {"type": "string"},
                                 },
-                                "required": ["text", "pages"],
+                                "required": ["text", "pages", "prefix", "suffix"],
                             },
                         },
                         "category_summary": {"type": "string"},
@@ -280,12 +282,21 @@ async def analyze_pdf(path: Path, cfg: Config) -> dict:
                     pages = [p for p in pages_val if isinstance(p, int) and p > 0]
                 else:
                     pages = []
+                prefix_val = item.get("prefix") or item.get("context_before") or ""
+                suffix_val = item.get("suffix") or item.get("context_after") or ""
                 normalised_quotes.append({
                     "text": text_val.strip(),
                     "pages": pages,
+                    "prefix": prefix_val.strip() if isinstance(prefix_val, str) else "",
+                    "suffix": suffix_val.strip() if isinstance(suffix_val, str) else "",
                 })
             elif isinstance(item, str) and item.strip():
-                normalised_quotes.append({"text": item.strip(), "pages": []})
+                normalised_quotes.append({
+                    "text": item.strip(),
+                    "pages": [],
+                    "prefix": "",
+                    "suffix": "",
+                })
         quotes[category] = normalised_quotes
         summary_val = cat_data.get("category_summary") or cat_data.get("summary") or ""
         category_summaries[category] = summary_val
