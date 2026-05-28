@@ -80,10 +80,13 @@ def main(
         quotes = quotes_payload.get("quotes") or quotes_payload
         md_note = quotes_payload.get("key_takeaways", "")
         pdf_path = pdf_paths[0]
-        pdf_out, md_out, quotes_out = finalize_output(pdf_path, quotes, md_note, cfg, output_dir=output_dir_path)
+        pdf_out, md_out, quotes_out, match_report_out = finalize_output(
+            pdf_path, quotes, md_note, cfg, output_dir=output_dir_path
+        )
         typer.echo(f"Annotated PDF saved to: {pdf_out}")
         typer.echo(f"Markdown summary saved to: {md_out}")
         typer.echo(f"Quotes JSON saved to: {quotes_out}")
+        typer.echo(f"Quote match report saved to: {match_report_out}")
         return
 
     typer.echo(f"Processing {len(pdf_paths)} file(s)...")
@@ -97,10 +100,11 @@ def main(
                 show_progress=progress,
             )
         )
-        for pdf_out, md_out, quotes_out in results:
+        for pdf_out, md_out, quotes_out, match_report_out in results:
             typer.echo(f"Annotated PDF saved to: {pdf_out}")
             typer.echo(f"Markdown summary saved to: {md_out}")
             typer.echo(f"Quotes JSON saved to: {quotes_out}")
+            typer.echo(f"Quote match report saved to: {match_report_out}")
     except Exception as e:
         typer.echo(f"Error during processing: {e}", err=True)
 

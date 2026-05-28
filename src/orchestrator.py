@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 
-async def run_pipeline(pdf_path: Path, cfg: Config, output_dir: Optional[Path] = None) -> Tuple[Path, Path, Path]:
+async def run_pipeline(pdf_path: Path, cfg: Config, output_dir: Optional[Path] = None) -> Tuple[Path, Path, Path, Path]:
     """
     Run the complete pipeline on a PDF file via Assistants API.
     """
@@ -34,7 +34,7 @@ async def batch_process(
     verbose: bool = False,
     output_dir: Optional[Path] = None,
     show_progress: bool = True,
-) -> List[Tuple[Path, Path, Path]]:
+) -> List[Tuple[Path, Path, Path, Path]]:
     """
     Process multiple PDF files in sequence.
     
@@ -44,7 +44,8 @@ async def batch_process(
         verbose: Whether to enable verbose logging
         
     Returns:
-        List[Tuple[Path, Path]]: List of output paths (PDF, markdown)
+        List[Tuple[Path, Path, Path, Path]]: List of output paths
+            (PDF, markdown, quotes JSON, quote-match report JSON)
     """
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -63,8 +64,8 @@ async def batch_process(
             handler.setFormatter(formatter)
             logging.getLogger().addHandler(handler)
         try:
-            pdf_out, md_out, quotes_out = await run_pipeline(pdf_path, cfg, output_dir=output_dir)
-            results.append((pdf_out, md_out, quotes_out))
+            pdf_out, md_out, quotes_out, match_report_out = await run_pipeline(pdf_path, cfg, output_dir=output_dir)
+            results.append((pdf_out, md_out, quotes_out, match_report_out))
         finally:
             if handler:
                 logging.getLogger().removeHandler(handler)

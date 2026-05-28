@@ -16,7 +16,7 @@ def finalize_output(
     md_note: str, 
     cfg: Config,
     output_dir: Optional[Path] = None,
-) -> Tuple[Path, Path, Path]:
+) -> Tuple[Path, Path, Path, Path]:
     """
     Annotates the PDF, builds the full markdown content, and saves both.
 
@@ -28,10 +28,11 @@ def finalize_output(
         output_dir: Optional directory where output files should be saved.
 
     Returns:
-        Tuple[Path, Path]: Paths to the annotated PDF and the saved markdown file.
+        Tuple[Path, Path, Path, Path]: Paths to the annotated PDF, markdown,
+            quotes JSON, and quote-match report JSON.
     """
     # Annotate PDF
-    pdf_out = annotate_pdf(
+    pdf_out, match_report = annotate_pdf(
         pdf_path,
         quotes,
         md_note,
@@ -53,6 +54,11 @@ def finalize_output(
         f"{md_note.strip()}\n\n"
         "## Quote counts by category\n"
         f"{quote_counts_lines}\n\n"
+        "## Quote match report\n"
+        f"- Matched: {match_report['matched']} quote"
+        f"{'s' if match_report['matched'] != 1 else ''}\n"
+        f"- Skipped: {match_report['skipped']} quote"
+        f"{'s' if match_report['skipped'] != 1 else ''}\n\n"
         "## Exact quotations by category\n"
     )
     def _format_quote_entry(entry: Any) -> str:
@@ -80,6 +86,16 @@ def finalize_output(
         full_md += f"\n### {category.capitalize()}\n"
         for q in items:
             full_md += _format_quote_entry(q) + "\n"
+
+    skipped_entries = [entry for entry in match_report["records"] if not entry["matched"]]
+    if skipped_entries:
+        full_md += "\n## Skipped quotes\n"
+        for entry in skipped_entries:
+            reason = entry.get("skipped_reason") or "not matched"
+            full_md += (
+                f"- {entry['category']} #{entry['quote_index']} ({reason}): "
+                f"{entry['text']}\n"
+            )
             
     # Save markdown
     md_out = save_markdown(pdf_path, full_md, output_dir=output_dir)
@@ -92,5 +108,8 @@ def finalize_output(
     target_dir = output_dir if output_dir else pdf_path.parent
     quotes_path = target_dir / f"{pdf_path.stem}_quotes.json"
     quotes_path.write_text(json.dumps(quotes_payload, indent=2), encoding="utf-8")
+
+    match_report_path = target_dir / f"{pdf_path.stem}_quote_matches.json"
+    match_report_path.write_text(json.dumps(match_report, indent=2), encoding="utf-8")
     
-    return pdf_out, md_out, quotes_path
+    return pdf_out, md_out, quotes_path, match_report_path

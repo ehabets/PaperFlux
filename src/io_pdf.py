@@ -4,7 +4,7 @@ Handles text extraction and PDF annotation.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 import logging
@@ -74,7 +74,7 @@ def annotate_pdf(
     colors: Optional[Dict[str, List[float]]] = None,
     cfg: Optional[Config] = None,
     output_dir: Optional[Path] = None,
-) -> Path:
+) -> Tuple[Path, Dict[str, Any]]:
     """
     Annotate a PDF file with highlights and a sticky note using local quote alignment.
 
@@ -87,7 +87,7 @@ def annotate_pdf(
         output_dir: Optional directory where the annotated PDF should be saved
 
     Returns:
-        Path: Path to annotated PDF file
+        Tuple[Path, Dict[str, Any]]: Path to annotated PDF file and quote match report
     """
     # Get colors from config if not explicitly provided
     if colors is None and cfg is not None and hasattr(cfg, "ui") and hasattr(cfg.ui, "highlight_colors"):
@@ -128,24 +128,55 @@ def annotate_pdf(
         logger.error(f"Error adding sticky note: {str(e)}")
     
     highlight_count = 0
+    quote_match_records: List[Dict[str, Any]] = []
     
     for category, category_quotes in quotes.items():
         if category not in colors:
             logger.warning(f"No color defined for category: {category}")
+            for i, raw_quote in enumerate(category_quotes):
+                payload = _coerce_quote_payload(raw_quote)
+                quote_match_records.append({
+                    "category": category,
+                    "quote_index": i + 1,
+                    "text": payload.text if payload else str(raw_quote),
+                    "matched": False,
+                    "page": None,
+                    "score": None,
+                    "method": None,
+                    "matched_text": "",
+                    "skipped_reason": "no highlight color defined for category",
+                })
             continue
         
         rgb = colors[category]
         logger.info(f"Processing {len(category_quotes)} quotes for {category} with color {rgb}")
         
         for i, raw_quote in enumerate(category_quotes):
+            report_entry: Dict[str, Any] = {
+                "category": category,
+                "quote_index": i + 1,
+                "text": "",
+                "matched": False,
+                "page": None,
+                "score": None,
+                "method": None,
+                "matched_text": "",
+                "skipped_reason": None,
+            }
             payload = _coerce_quote_payload(raw_quote)
             if not payload:
                 logger.warning(f"Unsupported quote payload in {category}, skipping: {raw_quote}")
+                report_entry["text"] = str(raw_quote)
+                report_entry["skipped_reason"] = "unsupported quote payload"
+                quote_match_records.append(report_entry)
                 continue
 
             cleaned_quote = _strip_wrapping_quotes(payload.text)
+            report_entry["text"] = cleaned_quote
             if not cleaned_quote:
                 logger.warning(f"Quote contains only wrapping punctuation in {category}, skipping")
+                report_entry["skipped_reason"] = "quote contains only wrapping punctuation"
+                quote_match_records.append(report_entry)
                 continue
 
             logger.debug(f"{category} quote {i+1}: '{cleaned_quote[:50]}...' ({len(cleaned_quote)} chars)")
@@ -168,15 +199,26 @@ def annotate_pdf(
                     min_similarity,
                     cleaned_quote[:50],
                 )
+                report_entry["skipped_reason"] = (
+                    f"not found above similarity threshold {min_similarity:.2f}"
+                )
+                quote_match_records.append(report_entry)
                 continue
 
             page = doc[match.page_index]
+            report_entry.update({
+                "page": match.page_index + 1,
+                "score": round(match.score, 6),
+                "method": match.method,
+                "matched_text": match.matched_text,
+            })
             try:
                 areas = match.areas if len(match.areas) > 1 else match.areas[0]
                 annot = page.add_highlight_annot(areas)
                 annot.set_colors(stroke=rgb)
                 annot.update()
                 highlight_count += 1
+                report_entry["matched"] = True
                 logger.debug(
                     "Highlighted quote on page %s via %s match (score=%.3f, areas=%s): '%s'",
                     match.page_index + 1,
@@ -187,8 +229,17 @@ def annotate_pdf(
                 )
             except Exception as e:
                 logger.error(f"Error highlighting quote match: {str(e)}")
+                report_entry["skipped_reason"] = f"highlight failed: {e}"
+            quote_match_records.append(report_entry)
     
     logger.info(f"Added {highlight_count} highlights across all categories")
+    skipped_count = sum(1 for item in quote_match_records if not item["matched"])
+    match_report = {
+        "total": len(quote_match_records),
+        "matched": highlight_count,
+        "skipped": skipped_count,
+        "records": quote_match_records,
+    }
     
     # Save the annotated PDF
     stem = path.stem
@@ -205,7 +256,7 @@ def annotate_pdf(
         logger.error(f"Error saving PDF: {str(e)}")
     
     doc.close()
-    return output_path
+    return output_path, match_report
 
 def save_markdown(path: Path, content: str, output_dir: Optional[Path] = None) -> Path:
     """
