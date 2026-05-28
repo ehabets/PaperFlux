@@ -1,1 +1,30 @@
 .env
+.env.*
+!.env.example
+
+# Python environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Packaging artifacts
+build/
+dist/
+*.egg-info/
+
+# PaperFlux runtime/output artifacts
+.paperflux/
+*_annotated.pdf
+*_summary.md
+*_quotes.json
+*.log
+
+# Local editor/system files
+.DS_Store
+.idea/
+.vscode/
