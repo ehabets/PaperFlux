@@ -7,12 +7,10 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Literal, Set
 
-# Add dotenv import and load at the top
 from dotenv import load_dotenv
 import yaml
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
-# Load environment variables from .env file
 load_dotenv()
 
 
@@ -20,7 +18,6 @@ class OpenAIConfig(BaseModel):
     """OpenAI API configuration."""
     api_key: str
     model: str
-
 
 
 class UIConfig(BaseModel):
@@ -57,8 +54,9 @@ class MatchingConfig(BaseModel):
     min_similarity: float = Field(default=0.88, ge=0.0, le=1.0)
     max_window_tokens: int = Field(default=80, ge=8)
 
+
 class RagConfig(BaseModel):
-    """RAG assistant specific configuration."""
+    """RAG retrieval and summarization configuration."""
 
     category_prompt_file: str = "prompts/rag_category_prompt.j2"
     summary_prompt_file: str = "prompts/rag_summary_prompt.j2"
@@ -66,8 +64,8 @@ class RagConfig(BaseModel):
     max_num_results: Optional[int] = Field(default=None, ge=1)
     max_quotes_per_category: int = Field(default=6, ge=1)
     include_search_results: bool = False
-    stream: bool = False
     vector_store_expires_after_days: int = Field(default=1, ge=1)
+
 
 class Config(BaseModel):
     """Main configuration."""

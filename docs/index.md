@@ -37,8 +37,7 @@ Quick start (local):
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ### 2. Configure the API Key
@@ -91,9 +90,9 @@ Choose one of the following setups:
 Run the CLI:
 
 ```bash
-python -m src.cli --config config.yaml path/to/your.pdf
+paperflux --config config.yaml path/to/your.pdf
 # or reuse prior quotes without extraction
-python -m src.cli --config config.yaml --quotes-file your_paper_quotes.json path/to/your.pdf
+paperflux --config config.yaml --quotes-file your_paper_quotes.json path/to/your.pdf
 ```
 
 #### Options

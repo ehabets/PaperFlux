@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 
 async def run_pipeline(pdf_path: Path, cfg: Config, output_dir: Optional[Path] = None) -> Tuple[Path, Path, Path, Path]:
     """
-    Run the complete pipeline on a PDF file via Assistants API.
+    Run the complete pipeline on a PDF file via the Responses API.
     """
-    # Invoke Assistants workflow
+    # Invoke the OpenAI analysis workflow.
     result = await analyze_pdf(pdf_path, cfg)
     md_note = result["key_takeaways"]
     quotes = result["quotes"]

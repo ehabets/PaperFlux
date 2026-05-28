@@ -9,8 +9,7 @@ AI-powered PDF annotation for research papers. PaperFlux extracts exact quotatio
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ### 2. Set API Key
@@ -22,7 +21,7 @@ export OPENAI_API_KEY="sk-your-key"
 ### 3. Run
 
 ```bash
-python -m src.cli --config config.yaml path/to/paper.pdf
+paperflux --config config.yaml path/to/paper.pdf
 ```
 
 ## Features
@@ -32,6 +31,8 @@ python -m src.cli --config config.yaml path/to/paper.pdf
 - RAG-based extraction with exact quotes
 - Color-coded highlights by category
 - Markdown summary with sticky note
+- Quote-match report with matched/skipped counts and scores
+- Layout-aware quote matching across column, table, figure, and caption interruptions
 - Configurable prompts and colors
 
 ## Documentation

@@ -28,7 +28,6 @@ rag:
   summary_prompt_file: "prompts/rag_summary_prompt.j2"
   max_num_results: 7
   max_quotes_per_category: 5
-  stream: true
 """
     config_file = tmp_path / "config.yaml"
     config_file.write_text(config_content)
@@ -50,7 +49,6 @@ rag:
     assert cfg.rag.summary_prompt_file == "prompts/rag_summary_prompt.j2"
     assert cfg.rag.max_num_results == 7
     assert cfg.rag.max_quotes_per_category == 5
-    assert cfg.rag.stream is True
 
 
 def test_missing_highlight_colors(tmp_path):
@@ -68,9 +66,6 @@ extraction_categories:
   categories:
     contributions: "..."
     methodology: "..."
-
-matching:
-  method: "fuzzy"
 
 rag:
   category_prompt_file: "prompts/rag_category_prompt.j2"
