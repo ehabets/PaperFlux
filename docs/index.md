@@ -26,7 +26,7 @@ PaperFlux helps you read scientific papers faster by automatically extracting ex
 - Optional output directory for generated artifacts
 - Markdown summary injected as sticky note on page 1
 - Color-coded highlights: contributions (Y), limitations (O), claims (B), evidence (G)
-- Quote-match report with matched/skipped counts, pages, scores, and layout-gap matches
+- Quote-match report with matched/skipped counts, pages, scores, and verbose layout-gap diagnostics
 
 ## Getting Started
 
@@ -99,7 +99,7 @@ paperflux --config config.yaml --quotes-file your_paper_quotes.json path/to/your
 
 - `--config`, `-c`: Path to configuration file (required)
 - `--detail`, `-d`: Detail level (low/medium/high, overrides config)
-- `--verbose`: Enable verbose output
+- `--verbose`: Enable internal logs, per-quote match details, and layout-gap diagnostics
 - `--output-dir`, `-o`: Directory where annotated PDFs and summaries will be saved
 - `--progress/--no-progress`: Show or hide per-file progress updates (default: shown)
 - `--quotes-file`: Path to JSON quotes file to annotate without rerunning extraction
@@ -179,7 +179,7 @@ The highlighter first tries exact and fuzzy contiguous matching. If those fail, 
 - v3.1.20251116: Introduced a `--quotes-file` flow to re-annotate quickly without re-running extraction.
 - v3.2.20260527: Updated default model to GPT-5.4 mini and added file-search tuning options.
 - v3.3.20260527: Added local quote span alignment for more accurate PDF highlights.
-- v3.4.20260528: Added layout-gap quote matching for quotes split by tables, figures, captions, or column breaks; added quote-match reports, package metadata, and CLI validation improvements.
+- v3.4.20260528: Added layout-gap quote matching for quotes split by tables, figures, captions, or column breaks; added quote-match reports, concise default CLI output with verbose diagnostics, package metadata, and CLI validation improvements.
 
 ## Contributing
 

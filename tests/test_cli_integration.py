@@ -155,8 +155,13 @@ def test_cli_full_pipeline_with_mocked_openai_and_tiny_pdf(tmp_path, monkeypatch
     assert deleted_vector_stores == ["vs_test"]
     assert response_requests[0]["tools"][0]["vector_store_ids"] == ["vs_test"]
     assert "contributions" in response_requests[0]["input"][1]["content"]
-    assert "Quote match report: 1/1 matched, 0 skipped" in result.output
-    assert "contributions #1: p. 1, exact, score" in result.output
+    assert "Input" in result.output
+    assert "Processing" in result.output
+    assert "Outputs" in result.output
+    assert "Quote Matches" in result.output
+    assert "- Summary: 1/1 matched, 0 skipped" in result.output
+    assert "Matched quotes:" not in result.output
+    assert "contributions #1: p. 1, exact, score" not in result.output
 
     report_path = output_dir / "paper_quote_matches.json"
     assert (output_dir / "paper_annotated.pdf").exists()
@@ -169,6 +174,65 @@ def test_cli_full_pipeline_with_mocked_openai_and_tiny_pdf(tmp_path, monkeypatch
     assert report["skipped"] == 0
     assert report["records"][0]["page"] == 1
     assert report["records"][0]["score"] >= 0.88
+
+
+def test_quote_match_report_prints_details_only_when_verbose(tmp_path, capsys):
+    report_path = tmp_path / "paper_quote_matches.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "total": 2,
+                "matched": 1,
+                "skipped": 1,
+                "records": [
+                    {
+                        "category": "limitations",
+                        "quote_index": 1,
+                        "text": "split quote",
+                        "matched": True,
+                        "page": 4,
+                        "score": 0.94,
+                        "method": "layout-gap",
+                        "segments": 4,
+                        "matched_text": "split quote",
+                        "skipped_reason": None,
+                    },
+                    {
+                        "category": "claims",
+                        "quote_index": 2,
+                        "text": "missing quote",
+                        "matched": False,
+                        "page": None,
+                        "score": None,
+                        "method": None,
+                        "segments": 0,
+                        "matched_text": "",
+                        "skipped_reason": "not found",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cli._echo_quote_match_report(report_path, verbose=False)
+    default_output = capsys.readouterr().out
+    assert "Quote Matches" in default_output
+    assert "- Summary: 1/2 matched, 1 skipped" in default_output
+    assert "- Methods: layout-gap 1" in default_output
+    assert "Layout-gap matches:" not in default_output
+    assert "- limitations #1: p. 4, score 0.940, 4 segments" not in default_output
+    assert "Skipped quotes:" in default_output
+    assert "missing quote" in default_output
+    assert "Matched quotes:" not in default_output
+    assert "Run with --verbose" not in default_output
+
+    cli._echo_quote_match_report(report_path, verbose=True)
+    verbose_output = capsys.readouterr().out
+    assert "Layout-gap matches:" in verbose_output
+    assert "- limitations #1: p. 4, score 0.940, 4 segments" in verbose_output
+    assert "Matched quotes:" in verbose_output
+    assert "- limitations #1: p. 4, layout-gap, score 0.940, segments 4" in verbose_output
 
 
 def test_cli_rejects_invalid_detail_override(tmp_path):

@@ -28,7 +28,55 @@ def _apply_cli_overrides(cfg: Config, *, detail: Optional[str] = None) -> Config
     return updated_cfg
 
 
-def _echo_quote_match_report(report_path: Path) -> None:
+def _echo_section(title: str) -> None:
+    typer.echo()
+    typer.echo(title)
+
+
+def _format_plural(count: int, singular: str, plural: Optional[str] = None) -> str:
+    return f"{count} {singular if count == 1 else plural or singular + 's'}"
+
+
+def _echo_run_context(
+    *,
+    config_path: Path,
+    pdf_paths: List[Path],
+    output_dir: Optional[Path],
+    quotes_path: Optional[Path],
+) -> None:
+    typer.echo("PaperFlux")
+    _echo_section("Input")
+    typer.echo(f"- Config: {config_path}")
+    typer.echo(f"- PDFs: {_format_plural(len(pdf_paths), 'file')}")
+    if len(pdf_paths) == 1:
+        typer.echo(f"- PDF: {pdf_paths[0]}")
+    if quotes_path:
+        typer.echo("- Mode: annotate from saved quotes")
+        typer.echo(f"- Quotes file: {quotes_path}")
+    else:
+        typer.echo("- Mode: extract quotes and annotate")
+    if output_dir:
+        typer.echo(f"- Output directory: {output_dir}")
+    elif len(pdf_paths) == 1:
+        typer.echo(f"- Output directory: {pdf_paths[0].parent}")
+    else:
+        typer.echo("- Output directory: source PDF directories")
+
+
+def _echo_output_paths(
+    pdf_out: Path,
+    md_out: Path,
+    quotes_out: Path,
+    match_report_out: Path,
+) -> None:
+    _echo_section("Outputs")
+    typer.echo(f"- Annotated PDF: {pdf_out}")
+    typer.echo(f"- Markdown summary: {md_out}")
+    typer.echo(f"- Quotes JSON: {quotes_out}")
+    typer.echo(f"- Quote match report: {match_report_out}")
+
+
+def _echo_quote_match_report(report_path: Path, *, verbose: bool = False) -> None:
     """Print a concise quote-match report to the terminal."""
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -39,13 +87,46 @@ def _echo_quote_match_report(report_path: Path) -> None:
     matched = int(report.get("matched", 0))
     skipped = int(report.get("skipped", 0))
     total = int(report.get("total", matched + skipped))
-    typer.echo(f"Quote match report: {matched}/{total} matched, {skipped} skipped")
 
     records = report.get("records") or []
     matched_records = [record for record in records if record.get("matched")]
     skipped_records = [record for record in records if not record.get("matched")]
+    method_counts: dict[str, int] = {}
+    for record in matched_records:
+        method = str(record.get("method") or "unknown")
+        method_counts[method] = method_counts.get(method, 0) + 1
 
-    if matched_records:
+    _echo_section("Quote Matches")
+    typer.echo(f"- Summary: {matched}/{total} matched, {skipped} skipped")
+    if method_counts:
+        methods = ", ".join(
+            f"{method} {count}" for method, count in sorted(method_counts.items())
+        )
+        typer.echo(f"- Methods: {methods}")
+
+    layout_gap_records = [
+        record for record in matched_records if record.get("method") == "layout-gap"
+    ]
+    if verbose and layout_gap_records:
+        typer.echo("Layout-gap matches:")
+        for record in layout_gap_records:
+            segments = int(record.get("segments") or 0)
+            segment_text = f", {segments} segments" if segments else ""
+            typer.echo(
+                f"- {record['category']} #{record['quote_index']}: "
+                f"p. {record['page']}, score {record['score']:.3f}{segment_text}"
+            )
+
+    if skipped_records:
+        typer.echo("Skipped quotes:")
+        for record in skipped_records:
+            reason = record.get("skipped_reason") or "not matched"
+            typer.echo(
+                f"- {record['category']} #{record['quote_index']} ({reason}): "
+                f"{record['text']}"
+            )
+
+    if verbose and matched_records:
         typer.echo("Matched quotes:")
         for record in matched_records:
             segments = int(record.get("segments") or 0)
@@ -58,15 +139,6 @@ def _echo_quote_match_report(report_path: Path) -> None:
                 f"- {record['category']} #{record['quote_index']}: "
                 f"p. {record['page']}, {record['method']}, "
                 f"score {record['score']:.3f}{segments_suffix}"
-            )
-
-    if skipped_records:
-        typer.echo("Skipped quotes:")
-        for record in skipped_records:
-            reason = record.get("skipped_reason") or "not matched"
-            typer.echo(
-                f"- {record['category']} #{record['quote_index']} ({reason}): "
-                f"{record['text']}"
             )
 
 
@@ -83,18 +155,18 @@ def main(
     """
     Analyze one or more PDF files and produce annotated PDFs and markdown summaries.
     """
-    # Configure logging before any other imports or logic
-    log_level = logging.DEBUG if verbose else logging.INFO
+    # Configure logging before any other imports or logic.
+    log_level = logging.DEBUG if verbose else logging.ERROR
     logging.basicConfig(
         level=log_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        force=True,
     )
 
     # Convert to absolute paths
     config_path = Path(os.path.abspath(config))
     pdf_paths = [Path(os.path.abspath(pdf)) for pdf in pdfs]
     
-    typer.echo(f"Load configuration from: {config_path}")
     if not config_path.exists():
         typer.echo(f"Configuration file {config_path} does not exist.")
         raise typer.Exit(code=1)
@@ -123,7 +195,6 @@ def main(
     if output_dir:
         output_dir_path = Path(os.path.abspath(output_dir))
         output_dir_path.mkdir(parents=True, exist_ok=True)
-        typer.echo(f"Outputs will be saved to: {output_dir_path}")
 
     if quotes_file:
         from .utils import finalize_output
@@ -134,6 +205,14 @@ def main(
         if not quotes_path.exists():
             typer.echo(f"Quotes file {quotes_path} does not exist.")
             raise typer.Exit(code=1)
+        _echo_run_context(
+            config_path=config_path,
+            pdf_paths=pdf_paths,
+            output_dir=output_dir_path,
+            quotes_path=quotes_path,
+        )
+        _echo_section("Processing")
+        typer.echo(f"- Annotating {pdf_paths[0].name}")
         try:
             quotes_payload = json.loads(quotes_path.read_text())
         except Exception as exc:
@@ -149,14 +228,18 @@ def main(
         except Exception as exc:
             typer.echo(f"Error during annotation: {exc}", err=True)
             raise typer.Exit(code=1)
-        typer.echo(f"Annotated PDF saved to: {pdf_out}")
-        typer.echo(f"Markdown summary saved to: {md_out}")
-        typer.echo(f"Quotes JSON saved to: {quotes_out}")
-        typer.echo(f"Quote match report saved to: {match_report_out}")
-        _echo_quote_match_report(match_report_out)
+        _echo_output_paths(pdf_out, md_out, quotes_out, match_report_out)
+        _echo_quote_match_report(match_report_out, verbose=verbose)
         return
 
-    typer.echo(f"Processing {len(pdf_paths)} file(s)...")
+    _echo_run_context(
+        config_path=config_path,
+        pdf_paths=pdf_paths,
+        output_dir=output_dir_path,
+        quotes_path=None,
+    )
+    _echo_section("Processing")
+    typer.echo(f"- Processing {_format_plural(len(pdf_paths), 'PDF')}")
     try:
         results = asyncio.run(
             batch_process(
@@ -168,11 +251,8 @@ def main(
             )
         )
         for pdf_out, md_out, quotes_out, match_report_out in results:
-            typer.echo(f"Annotated PDF saved to: {pdf_out}")
-            typer.echo(f"Markdown summary saved to: {md_out}")
-            typer.echo(f"Quotes JSON saved to: {quotes_out}")
-            typer.echo(f"Quote match report saved to: {match_report_out}")
-            _echo_quote_match_report(match_report_out)
+            _echo_output_paths(pdf_out, md_out, quotes_out, match_report_out)
+            _echo_quote_match_report(match_report_out, verbose=verbose)
     except Exception as e:
         typer.echo(f"Error during processing: {e}", err=True)
         raise typer.Exit(code=1)
