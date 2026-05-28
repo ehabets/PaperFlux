@@ -1,6 +1,38 @@
 [build-system]
-requires = ["setuptools>=42.0", "wheel"]
+requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "paperflux"
+version = "0.1.0"
+description = "AI-powered PDF annotation for research papers"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+    { name = "PaperFlux contributors" },
+]
+dependencies = [
+    "openai>=2.38.0",
+    "typer>=0.15.4",
+    "PyMuPDF>=1.24",
+    "pyyaml>=6.0",
+    "pydantic>=2.7",
+    "rich>=13.7",
+    "python-dotenv>=1.0.0",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+]
+
+[project.scripts]
+paperflux = "src.cli:run"
+
+[tool.setuptools]
+packages = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

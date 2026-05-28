@@ -104,5 +104,10 @@ def main(
     except Exception as e:
         typer.echo(f"Error during processing: {e}", err=True)
 
-if __name__ == "__main__":
+def run() -> None:
+    """Console script entry point."""
     app(prog_name="PaperFlux")
+
+
+if __name__ == "__main__":
+    run()
