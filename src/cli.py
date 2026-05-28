@@ -1,6 +1,7 @@
 """CLI entry point for PaperFlux."""
 
 import asyncio
+import json
 import logging
 import os
 from pathlib import Path
@@ -25,6 +26,41 @@ def _apply_cli_overrides(cfg: Config, *, detail: Optional[str] = None) -> Config
     updated_cfg = Config(**cfg_data)
     updated_cfg._config_dir = getattr(cfg, "_config_dir", None)
     return updated_cfg
+
+
+def _echo_quote_match_report(report_path: Path) -> None:
+    """Print a concise quote-match report to the terminal."""
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        typer.echo(f"Failed to read quote match report: {exc}", err=True)
+        return
+
+    matched = int(report.get("matched", 0))
+    skipped = int(report.get("skipped", 0))
+    total = int(report.get("total", matched + skipped))
+    typer.echo(f"Quote match report: {matched}/{total} matched, {skipped} skipped")
+
+    records = report.get("records") or []
+    matched_records = [record for record in records if record.get("matched")]
+    skipped_records = [record for record in records if not record.get("matched")]
+
+    if matched_records:
+        typer.echo("Matched quotes:")
+        for record in matched_records:
+            typer.echo(
+                f"- {record['category']} #{record['quote_index']}: "
+                f"p. {record['page']}, {record['method']}, score {record['score']:.3f}"
+            )
+
+    if skipped_records:
+        typer.echo("Skipped quotes:")
+        for record in skipped_records:
+            reason = record.get("skipped_reason") or "not matched"
+            typer.echo(
+                f"- {record['category']} #{record['quote_index']} ({reason}): "
+                f"{record['text']}"
+            )
 
 
 @app.command(name="")  # Empty name makes this the default command
@@ -84,7 +120,6 @@ def main(
 
     if quotes_file:
         from .utils import finalize_output
-        import json
         if len(pdf_paths) != 1:
             typer.echo("--quotes-file can be used with exactly one PDF.", err=True)
             raise typer.Exit(code=1)
@@ -111,6 +146,7 @@ def main(
         typer.echo(f"Markdown summary saved to: {md_out}")
         typer.echo(f"Quotes JSON saved to: {quotes_out}")
         typer.echo(f"Quote match report saved to: {match_report_out}")
+        _echo_quote_match_report(match_report_out)
         return
 
     typer.echo(f"Processing {len(pdf_paths)} file(s)...")
@@ -129,6 +165,7 @@ def main(
             typer.echo(f"Markdown summary saved to: {md_out}")
             typer.echo(f"Quotes JSON saved to: {quotes_out}")
             typer.echo(f"Quote match report saved to: {match_report_out}")
+            _echo_quote_match_report(match_report_out)
     except Exception as e:
         typer.echo(f"Error during processing: {e}", err=True)
         raise typer.Exit(code=1)

@@ -155,6 +155,8 @@ def test_cli_full_pipeline_with_mocked_openai_and_tiny_pdf(tmp_path, monkeypatch
     assert deleted_vector_stores == ["vs_test"]
     assert response_requests[0]["tools"][0]["vector_store_ids"] == ["vs_test"]
     assert "contributions" in response_requests[0]["input"][1]["content"]
+    assert "Quote match report: 1/1 matched, 0 skipped" in result.output
+    assert "contributions #1: p. 1, exact, score" in result.output
 
     report_path = output_dir / "paper_quote_matches.json"
     assert (output_dir / "paper_annotated.pdf").exists()

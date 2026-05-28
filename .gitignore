@@ -22,6 +22,7 @@ dist/
 *_annotated.pdf
 *_summary.md
 *_quotes.json
+*_quote_matches.json
 *.log
 
 # Local editor/system files
