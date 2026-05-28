@@ -52,14 +52,8 @@ class ExtractionCategoriesConfig(BaseModel):
     )
 
 
-class TokenMatchingConfig(BaseModel):
-    """Token-based matching configuration."""
-    per_line: bool = False
-
-
 class MatchingConfig(BaseModel):
     """Quote matching configuration."""
-    token: TokenMatchingConfig = Field(default_factory=TokenMatchingConfig)
     min_similarity: float = Field(default=0.88, ge=0.0, le=1.0)
     max_window_tokens: int = Field(default=80, ge=8)
 

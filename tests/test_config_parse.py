@@ -22,8 +22,6 @@ ui:
 matching:
   min_similarity: 0.9
   max_window_tokens: 120
-  token:
-    per_line: true
 
 rag:
   category_prompt_file: "prompts/rag_category_prompt.j2"
@@ -48,7 +46,6 @@ rag:
     assert cfg.ui.highlight_colors["contributions"] == [1.0, 1.0, 0.0]
     assert cfg.matching.min_similarity == 0.9
     assert cfg.matching.max_window_tokens == 120
-    assert cfg.matching.token.per_line is True
     assert cfg.rag.category_prompt_file == "prompts/rag_category_prompt.j2"
     assert cfg.rag.summary_prompt_file == "prompts/rag_summary_prompt.j2"
     assert cfg.rag.max_num_results == 7
