@@ -26,6 +26,7 @@ PaperFlux helps you read scientific papers faster by automatically extracting ex
 - Optional output directory for generated artifacts
 - Markdown summary injected as sticky note on page 1
 - Color-coded highlights: contributions (Y), limitations (O), claims (B), evidence (G)
+- Quote-match report with matched/skipped counts, pages, scores, and layout-gap matches
 
 ## Getting Started
 
@@ -167,6 +168,8 @@ rag:
 
 Use `max_num_results` to cap retrieved passages when latency or cost matters. Use `max_quotes_per_category` to keep the structured JSON response bounded. The local highlighter uses `matching.min_similarity` and `matching.max_window_tokens` to align returned quotes to real PDF word spans; raising the similarity threshold improves precision, while lowering it improves recall. Enabling `include_search_results` is useful for debugging retrieval, but it increases the response payload.
 
+The highlighter first tries exact and fuzzy contiguous matching. If those fail, it can fall back to `layout-gap` matching for quotes split by page layout interruptions such as tables, figures, captions, or column breaks. Layout-gap matches highlight only the words that belong to the quote and skip intervening layout artifacts.
+
 ## Brief History
 
 - v1.0.20250525: Initial version using local text extraction, LLM-based processing of extracted text, and fuzzy quote matching for PDF annotation.
@@ -177,6 +180,7 @@ Use `max_num_results` to cap retrieved passages when latency or cost matters. Us
 - v3.1.20251116: Introduced a `--quotes-file` flow to re-annotate quickly without re-running extraction.
 - v3.2.20260527: Updated default model to GPT-5.4 mini and added file-search tuning options.
 - v3.3.20260527: Added local quote span alignment for more accurate PDF highlights.
+- v3.4.20260528: Added layout-gap quote matching for quotes split by tables, figures, captions, or column breaks; added quote-match reports, package metadata, and CLI validation improvements.
 
 ## Contributing
 

@@ -143,6 +143,7 @@ def annotate_pdf(
                     "page": None,
                     "score": None,
                     "method": None,
+                    "segments": 0,
                     "matched_text": "",
                     "skipped_reason": "no highlight color defined for category",
                 })
@@ -160,6 +161,7 @@ def annotate_pdf(
                 "page": None,
                 "score": None,
                 "method": None,
+                "segments": 0,
                 "matched_text": "",
                 "skipped_reason": None,
             }
@@ -210,6 +212,7 @@ def annotate_pdf(
                 "page": match.page_index + 1,
                 "score": round(match.score, 6),
                 "method": match.method,
+                "segments": len(match.areas),
                 "matched_text": match.matched_text,
             })
             try:

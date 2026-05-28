@@ -48,9 +48,16 @@ def _echo_quote_match_report(report_path: Path) -> None:
     if matched_records:
         typer.echo("Matched quotes:")
         for record in matched_records:
+            segments = int(record.get("segments") or 0)
+            segments_suffix = (
+                f", segments {segments}"
+                if record.get("method") == "layout-gap" and segments > 1
+                else ""
+            )
             typer.echo(
                 f"- {record['category']} #{record['quote_index']}: "
-                f"p. {record['page']}, {record['method']}, score {record['score']:.3f}"
+                f"p. {record['page']}, {record['method']}, "
+                f"score {record['score']:.3f}{segments_suffix}"
             )
 
     if skipped_records:

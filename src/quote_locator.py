@@ -133,6 +133,135 @@ def _score_context(
     return (base_score * 0.75) + (context_score * 0.25)
 
 
+def _contiguous_target_run(
+    page_tokens: Sequence[_WordToken],
+    page_start: int,
+    target_tokens: Sequence[str],
+    target_start: int,
+) -> int:
+    run = 0
+    while (
+        page_start + run < len(page_tokens)
+        and target_start + run < len(target_tokens)
+        and page_tokens[page_start + run].text == target_tokens[target_start + run]
+    ):
+        run += 1
+    return run
+
+
+def _is_layout_gap(
+    page_tokens: Sequence[_WordToken],
+    before_index: int,
+    after_index: int,
+) -> bool:
+    before = page_tokens[before_index]
+    after = page_tokens[after_index]
+    before_block, before_line = before.line_key
+    after_block, after_line = after.line_key
+    return before_block != after_block or before_line != after_line
+
+
+def _locate_layout_gap_match(
+    words: Sequence[Sequence[Any]],
+    page_tokens: Sequence[_WordToken],
+    target_tokens: Sequence[str],
+    *,
+    page_index: int,
+    min_similarity: float,
+    max_window_tokens: int,
+) -> Optional[QuoteMatch]:
+    """
+    Match a quote split by layout artifacts such as tables, figures, or captions.
+
+    This accepts exact target-token runs separated by gaps only when the gap
+    crosses a PDF line/block boundary. Skipped layout words are not highlighted.
+    """
+    if len(target_tokens) < 8:
+        return None
+
+    min_initial_run = min(3, len(target_tokens))
+    max_gaps = 3
+    layout_window_limit = max(max_window_tokens * 4, len(target_tokens) + 180)
+    best_score = 0.0
+    best_span: List[int] = []
+    best_gap_count = 0
+
+    for start in range(len(page_tokens)):
+        if page_tokens[start].text != target_tokens[0]:
+            continue
+
+        initial_run = _contiguous_target_run(page_tokens, start, target_tokens, 0)
+        if initial_run < min_initial_run:
+            continue
+
+        matched_page_indices = list(range(start, start + initial_run))
+        current_page_index = matched_page_indices[-1]
+        target_index = initial_run
+        gap_count = 0
+        skipped_token_count = 0
+        search_limit = min(len(page_tokens), start + layout_window_limit)
+
+        while target_index < len(target_tokens):
+            best_candidate_index: Optional[int] = None
+            best_candidate_run = 0
+
+            for candidate_index in range(current_page_index + 1, search_limit):
+                if page_tokens[candidate_index].text != target_tokens[target_index]:
+                    continue
+                run = _contiguous_target_run(
+                    page_tokens,
+                    candidate_index,
+                    target_tokens,
+                    target_index,
+                )
+                if run > best_candidate_run:
+                    best_candidate_index = candidate_index
+                    best_candidate_run = run
+                elif run == best_candidate_run and best_candidate_index is not None:
+                    if candidate_index < best_candidate_index:
+                        best_candidate_index = candidate_index
+
+            if best_candidate_index is None or best_candidate_run == 0:
+                break
+
+            skipped = best_candidate_index - current_page_index - 1
+            if skipped:
+                if not _is_layout_gap(page_tokens, current_page_index, best_candidate_index):
+                    break
+                gap_count += 1
+                skipped_token_count += skipped
+                if gap_count > max_gaps:
+                    break
+
+            matched_page_indices.extend(
+                range(best_candidate_index, best_candidate_index + best_candidate_run)
+            )
+            current_page_index = matched_page_indices[-1]
+            target_index += best_candidate_run
+
+        coverage = target_index / len(target_tokens)
+        if coverage < 1.0 or not matched_page_indices or gap_count == 0:
+            continue
+
+        gap_penalty = min(0.12, (gap_count * 0.035) + (skipped_token_count * 0.0002))
+        score = 1.0 - gap_penalty
+        if score > best_score:
+            best_score = score
+            best_span = [page_tokens[index].word_index for index in matched_page_indices]
+            best_gap_count = gap_count
+
+    if best_score < min_similarity or not best_span or best_gap_count == 0:
+        return None
+
+    return QuoteMatch(
+        page_index=page_index,
+        score=best_score,
+        method="layout-gap",
+        areas=_line_rects_for_words(words, best_span),
+        matched_text=_matched_text(words, best_span),
+    )
+
+
 def locate_quote_in_words(
     words: Sequence[Sequence[Any]],
     quote_text: str,
@@ -240,6 +369,16 @@ def locate_quote_in_words(
                 best_span = matched_word_indices.copy()
 
     if best_score < min_similarity or not best_span:
+        layout_gap_match = _locate_layout_gap_match(
+            words,
+            page_tokens,
+            target_tokens,
+            page_index=page_index,
+            min_similarity=min_similarity,
+            max_window_tokens=max_window_tokens,
+        )
+        if layout_gap_match:
+            return layout_gap_match
         return None
 
     return QuoteMatch(
