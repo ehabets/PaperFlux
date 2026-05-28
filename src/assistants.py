@@ -1,22 +1,36 @@
 import json
+import logging
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 
 from openai import OpenAI, AsyncOpenAI
 from .config import Config
 from jinja2 import Environment, FileSystemLoader
 
+logger = logging.getLogger(__name__)
 
-def _load_template(template_path: str):
+
+def _resolve_config_path(path: Union[str, Path], cfg: Config) -> Path:
+    candidate = Path(path)
+    if candidate.is_absolute():
+        return candidate
+    config_dir = getattr(cfg, "_config_dir", None)
+    if config_dir is not None:
+        return config_dir / candidate
+    return candidate
+
+
+def _load_template(template_path: Union[str, Path]):
     """
     Load Jinja2 template given its filesystem path.
     """
-    env = Environment(loader=FileSystemLoader("."))
-    return env.get_template(template_path)
+    template_path = Path(template_path)
+    env = Environment(loader=FileSystemLoader(str(template_path.parent or Path("."))))
+    return env.get_template(template_path.name)
 
 
-def _load_text_file(path: str) -> str:
+def _load_text_file(path: Union[str, Path]) -> str:
     with open(path, "r", encoding="utf-8") as handle:
         return handle.read().strip()
 
@@ -167,158 +181,169 @@ async def analyze_pdf(path: Path, cfg: Config) -> dict:
     """
     # Sync client used for vector store creation/upload (simpler surface)
     client_sync = OpenAI(api_key=cfg.openai.api_key)
+    vector_store_id: Optional[str] = None
 
-    # 1) Create vector store and upload PDF
-    vector_store = client_sync.vector_stores.create(
-        name="PaperFlux Vector Store",
-        expires_after={
-            "anchor": "last_active_at",
-            "days": cfg.rag.vector_store_expires_after_days,
-        },
-    )
-    with open(path, "rb") as f:
-        client_sync.vector_stores.files.upload_and_poll(
-            vector_store_id=vector_store.id,
-            file=f
+    try:
+        # 1) Create vector store and upload PDF
+        vector_store = client_sync.vector_stores.create(
+            name="PaperFlux Vector Store",
+            expires_after={
+                "anchor": "last_active_at",
+                "days": cfg.rag.vector_store_expires_after_days,
+            },
         )
-
-    categories = cfg.extraction_categories.categories  # Dict[name, description]
-
-    # 2) Bundle categories into a single Responses job with file_search tool
-    client_async = AsyncOpenAI(api_key=cfg.openai.api_key)
-    category_template = _load_template(cfg.rag.category_prompt_file)
-    category_system_prompt = _load_text_file(cfg.rag.category_system_prompt_file)
-
-    category_entries = [
-        {"name": cat, "description": desc}
-        for cat, desc in categories.items()
-    ]
-    user_msg = category_template.render(
-        categories=category_entries,
-        max_quotes_per_category=cfg.rag.max_quotes_per_category,
-    )
-
-    file_search_tool = {
-        "type": "file_search",
-        "vector_store_ids": [vector_store.id],
-    }
-    if cfg.rag.max_num_results is not None:
-        file_search_tool["max_num_results"] = cfg.rag.max_num_results
-    tools = [file_search_tool]
-
-    schema = _multi_category_schema(cfg.rag.max_quotes_per_category)
-    text_payload = _build_text_payload(
-        {
-            "type": "json_schema",
-            "name": "multi_category_schema",
-            "schema": schema,
-            "strict": True,
-        },
-        cfg.ui.verbosity,
-    )
-    reasoning_payload = _reasoning_payload(cfg.ui.reasoning_effort)
-    request_input = [
-        {"role": "system", "content": category_system_prompt},
-        {"role": "user", "content": user_msg},
-    ]
-    kwargs = {
-        "model": cfg.openai.model,
-        "input": request_input,
-        "max_output_tokens": cfg.ui.max_output_tokens,
-        "tools": tools,
-        "text": text_payload,
-        "tool_choice": {"type": "file_search"},
-        "store": False,
-    }
-    if cfg.rag.include_search_results:
-        kwargs["include"] = ["file_search_call.results"]
-    kwargs["reasoning"] = reasoning_payload
-    multi_resp = await client_async.responses.create(**kwargs)
-    _ensure_response_completed(multi_resp, "Category bundle", cfg.ui.max_output_tokens)
-
-    result = _extract_parsed_json(multi_resp)
-    if result is None:
-        text_val = _extract_response_text(multi_resp)
-        if not text_val or not text_val.strip():
-            dump_path = _dump_failed_response(
-                "category_bundle_no_parsed_json",
-                getattr(multi_resp, "output_text", "") or str(multi_resp),
+        vector_store_id = vector_store.id
+        with open(path, "rb") as f:
+            client_sync.vector_stores.files.upload_and_poll(
+                vector_store_id=vector_store_id,
+                file=f
             )
-            hint = f" (raw saved to {dump_path})" if dump_path else ""
-            raise ValueError(f"Category bundle response missing parsed JSON{hint}")
-        result = json.loads(text_val)
-    if not isinstance(result, dict):
-        raise ValueError(f"Category bundle returned non-dict JSON: {type(result)}")
 
-    bundle_list = result.get("categories")
-    if not isinstance(bundle_list, list):
-        raise ValueError("Category bundle JSON missing 'categories' array")
+        categories = cfg.extraction_categories.categories  # Dict[name, description]
 
-    quotes: Dict[str, list] = {}
-    category_summaries: Dict[str, str] = {}
-    for entry in bundle_list:
-        if not isinstance(entry, dict):
-            continue
-        category = entry.get("name") or entry.get("category")
-        if not isinstance(category, str):
-            continue
-        cat_data = entry
-        raw_quotes = (
-            cat_data.get("quotes")
-            or cat_data.get("evidence")
-            or cat_data.get("quote_list")
-            or []
+        # 2) Bundle categories into a single Responses job with file_search tool
+        client_async = AsyncOpenAI(api_key=cfg.openai.api_key)
+        category_template = _load_template(_resolve_config_path(cfg.rag.category_prompt_file, cfg))
+        category_system_prompt = _load_text_file(
+            _resolve_config_path(cfg.rag.category_system_prompt_file, cfg)
         )
-        normalised_quotes = []
-        for item in raw_quotes:
-            if isinstance(item, dict):
-                text_val = item.get("text") or item.get("quote") or item.get("content")
-                if not isinstance(text_val, str) or not text_val.strip():
-                    continue
-                pages_val = item.get("pages") or item.get("page")
-                if isinstance(pages_val, int):
-                    pages = [pages_val]
-                elif isinstance(pages_val, list):
-                    pages = [p for p in pages_val if isinstance(p, int) and p > 0]
-                else:
-                    pages = []
-                prefix_val = item.get("prefix") or item.get("context_before") or ""
-                suffix_val = item.get("suffix") or item.get("context_after") or ""
-                normalised_quotes.append({
-                    "text": text_val.strip(),
-                    "pages": pages,
-                    "prefix": prefix_val.strip() if isinstance(prefix_val, str) else "",
-                    "suffix": suffix_val.strip() if isinstance(suffix_val, str) else "",
-                })
-            elif isinstance(item, str) and item.strip():
-                normalised_quotes.append({
-                    "text": item.strip(),
-                    "pages": [],
-                    "prefix": "",
-                    "suffix": "",
-                })
-        quotes[category] = normalised_quotes
-        summary_val = cat_data.get("category_summary") or cat_data.get("summary") or ""
-        category_summaries[category] = summary_val
 
-    # 3) Synthesize global summary (no tools required)
-    summary_template = _load_template(cfg.rag.summary_prompt_file)
-    summary_msg = summary_template.render(
-        detail_level=cfg.ui.detail_level,
-        category_summaries=category_summaries
-    )
-    summary_text_payload = _build_text_payload({"type": "text"}, cfg.ui.verbosity)
-    summary_reasoning = _reasoning_payload(cfg.ui.reasoning_effort)
-    summary_kwargs = {
-        "model": cfg.openai.model,
-        "input": summary_msg,
-        "max_output_tokens": cfg.ui.max_output_tokens,
-        "text": summary_text_payload,
-        "store": False,
-    }
-    summary_kwargs["reasoning"] = summary_reasoning
-    summary_resp = await client_async.responses.create(**summary_kwargs)
-    _ensure_response_completed(summary_resp, "Summary", cfg.ui.max_output_tokens)
-    key_takeaways = _extract_response_text(summary_resp)
+        category_entries = [
+            {"name": cat, "description": desc}
+            for cat, desc in categories.items()
+        ]
+        user_msg = category_template.render(
+            categories=category_entries,
+            max_quotes_per_category=cfg.rag.max_quotes_per_category,
+        )
 
-    return {"key_takeaways": key_takeaways, "quotes": quotes}
+        file_search_tool = {
+            "type": "file_search",
+            "vector_store_ids": [vector_store_id],
+        }
+        if cfg.rag.max_num_results is not None:
+            file_search_tool["max_num_results"] = cfg.rag.max_num_results
+        tools = [file_search_tool]
+
+        schema = _multi_category_schema(cfg.rag.max_quotes_per_category)
+        text_payload = _build_text_payload(
+            {
+                "type": "json_schema",
+                "name": "multi_category_schema",
+                "schema": schema,
+                "strict": True,
+            },
+            cfg.ui.verbosity,
+        )
+        reasoning_payload = _reasoning_payload(cfg.ui.reasoning_effort)
+        request_input = [
+            {"role": "system", "content": category_system_prompt},
+            {"role": "user", "content": user_msg},
+        ]
+        kwargs = {
+            "model": cfg.openai.model,
+            "input": request_input,
+            "max_output_tokens": cfg.ui.max_output_tokens,
+            "tools": tools,
+            "text": text_payload,
+            "tool_choice": {"type": "file_search"},
+            "store": False,
+        }
+        if cfg.rag.include_search_results:
+            kwargs["include"] = ["file_search_call.results"]
+        kwargs["reasoning"] = reasoning_payload
+        multi_resp = await client_async.responses.create(**kwargs)
+        _ensure_response_completed(multi_resp, "Category bundle", cfg.ui.max_output_tokens)
+
+        result = _extract_parsed_json(multi_resp)
+        if result is None:
+            text_val = _extract_response_text(multi_resp)
+            if not text_val or not text_val.strip():
+                dump_path = _dump_failed_response(
+                    "category_bundle_no_parsed_json",
+                    getattr(multi_resp, "output_text", "") or str(multi_resp),
+                )
+                hint = f" (raw saved to {dump_path})" if dump_path else ""
+                raise ValueError(f"Category bundle response missing parsed JSON{hint}")
+            result = json.loads(text_val)
+        if not isinstance(result, dict):
+            raise ValueError(f"Category bundle returned non-dict JSON: {type(result)}")
+
+        bundle_list = result.get("categories")
+        if not isinstance(bundle_list, list):
+            raise ValueError("Category bundle JSON missing 'categories' array")
+
+        quotes: Dict[str, list] = {}
+        category_summaries: Dict[str, str] = {}
+        for entry in bundle_list:
+            if not isinstance(entry, dict):
+                continue
+            category = entry.get("name") or entry.get("category")
+            if not isinstance(category, str):
+                continue
+            cat_data = entry
+            raw_quotes = (
+                cat_data.get("quotes")
+                or cat_data.get("evidence")
+                or cat_data.get("quote_list")
+                or []
+            )
+            normalised_quotes = []
+            for item in raw_quotes:
+                if isinstance(item, dict):
+                    text_val = item.get("text") or item.get("quote") or item.get("content")
+                    if not isinstance(text_val, str) or not text_val.strip():
+                        continue
+                    pages_val = item.get("pages") or item.get("page")
+                    if isinstance(pages_val, int):
+                        pages = [pages_val]
+                    elif isinstance(pages_val, list):
+                        pages = [p for p in pages_val if isinstance(p, int) and p > 0]
+                    else:
+                        pages = []
+                    prefix_val = item.get("prefix") or item.get("context_before") or ""
+                    suffix_val = item.get("suffix") or item.get("context_after") or ""
+                    normalised_quotes.append({
+                        "text": text_val.strip(),
+                        "pages": pages,
+                        "prefix": prefix_val.strip() if isinstance(prefix_val, str) else "",
+                        "suffix": suffix_val.strip() if isinstance(suffix_val, str) else "",
+                    })
+                elif isinstance(item, str) and item.strip():
+                    normalised_quotes.append({
+                        "text": item.strip(),
+                        "pages": [],
+                        "prefix": "",
+                        "suffix": "",
+                    })
+            quotes[category] = normalised_quotes
+            summary_val = cat_data.get("category_summary") or cat_data.get("summary") or ""
+            category_summaries[category] = summary_val
+
+        # 3) Synthesize global summary (no tools required)
+        summary_template = _load_template(_resolve_config_path(cfg.rag.summary_prompt_file, cfg))
+        summary_msg = summary_template.render(
+            detail_level=cfg.ui.detail_level,
+            category_summaries=category_summaries
+        )
+        summary_text_payload = _build_text_payload({"type": "text"}, cfg.ui.verbosity)
+        summary_reasoning = _reasoning_payload(cfg.ui.reasoning_effort)
+        summary_kwargs = {
+            "model": cfg.openai.model,
+            "input": summary_msg,
+            "max_output_tokens": cfg.ui.max_output_tokens,
+            "text": summary_text_payload,
+            "store": False,
+        }
+        summary_kwargs["reasoning"] = summary_reasoning
+        summary_resp = await client_async.responses.create(**summary_kwargs)
+        _ensure_response_completed(summary_resp, "Summary", cfg.ui.max_output_tokens)
+        key_takeaways = _extract_response_text(summary_resp)
+
+        return {"key_takeaways": key_takeaways, "quotes": quotes}
+    finally:
+        if vector_store_id:
+            try:
+                client_sync.vector_stores.delete(vector_store_id=vector_store_id)
+            except Exception as exc:
+                logger.warning("Failed to delete vector store %s: %s", vector_store_id, exc)

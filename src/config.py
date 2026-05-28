@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Union, Literal, Set
 # Add dotenv import and load at the top
 from dotenv import load_dotenv
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 # Load environment variables from .env file
 load_dotenv()
@@ -77,6 +77,8 @@ class RagConfig(BaseModel):
 
 class Config(BaseModel):
     """Main configuration."""
+    _config_dir: Optional[Path] = PrivateAttr(default=None)
+
     openai: OpenAIConfig
     ui: UIConfig
     extraction_categories: ExtractionCategoriesConfig = Field(default_factory=ExtractionCategoriesConfig)
@@ -149,4 +151,6 @@ def load(config_path: Union[str, Path]) -> Config:
     config_dict = _process_config_dict(config_dict)
 
     # Convert to Pydantic model
-    return Config(**config_dict)
+    cfg = Config(**config_dict)
+    cfg._config_dir = config_path.parent
+    return cfg
