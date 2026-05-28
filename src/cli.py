@@ -7,11 +7,25 @@ from pathlib import Path
 from typing import List, Optional
 
 import typer
+from pydantic import ValidationError
 
 from .config import Config, load
 from .orchestrator import batch_process
 
 app = typer.Typer(add_completion=False)
+
+
+def _apply_cli_overrides(cfg: Config, *, detail: Optional[str] = None) -> Config:
+    """Apply CLI overrides by re-validating the Pydantic config model."""
+    if detail is None:
+        return cfg
+
+    cfg_data = cfg.model_dump()
+    cfg_data["ui"]["detail_level"] = detail
+    updated_cfg = Config(**cfg_data)
+    updated_cfg._config_dir = getattr(cfg, "_config_dir", None)
+    return updated_cfg
+
 
 @app.command(name="")  # Empty name makes this the default command
 def main(
@@ -56,8 +70,11 @@ def main(
     except Exception as exc:
         typer.echo(f"Failed to load configuration: {exc}", err=True)
         raise typer.Exit(code=1)
-    if detail:
-        cfg.ui.detail_level = detail
+    try:
+        cfg = _apply_cli_overrides(cfg, detail=detail)
+    except ValidationError as exc:
+        typer.echo(f"Invalid CLI override: {exc}", err=True)
+        raise typer.Exit(code=1)
 
     output_dir_path: Optional[Path] = None
     if output_dir:
@@ -68,6 +85,9 @@ def main(
     if quotes_file:
         from .utils import finalize_output
         import json
+        if len(pdf_paths) != 1:
+            typer.echo("--quotes-file can be used with exactly one PDF.", err=True)
+            raise typer.Exit(code=1)
         quotes_path = Path(os.path.abspath(quotes_file))
         if not quotes_path.exists():
             typer.echo(f"Quotes file {quotes_path} does not exist.")
@@ -80,9 +100,13 @@ def main(
         quotes = quotes_payload.get("quotes") or quotes_payload
         md_note = quotes_payload.get("key_takeaways", "")
         pdf_path = pdf_paths[0]
-        pdf_out, md_out, quotes_out, match_report_out = finalize_output(
-            pdf_path, quotes, md_note, cfg, output_dir=output_dir_path
-        )
+        try:
+            pdf_out, md_out, quotes_out, match_report_out = finalize_output(
+                pdf_path, quotes, md_note, cfg, output_dir=output_dir_path
+            )
+        except Exception as exc:
+            typer.echo(f"Error during annotation: {exc}", err=True)
+            raise typer.Exit(code=1)
         typer.echo(f"Annotated PDF saved to: {pdf_out}")
         typer.echo(f"Markdown summary saved to: {md_out}")
         typer.echo(f"Quotes JSON saved to: {quotes_out}")
@@ -107,6 +131,7 @@ def main(
             typer.echo(f"Quote match report saved to: {match_report_out}")
     except Exception as e:
         typer.echo(f"Error during processing: {e}", err=True)
+        raise typer.Exit(code=1)
 
 def run() -> None:
     """Console script entry point."""

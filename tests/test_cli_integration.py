@@ -167,3 +167,77 @@ def test_cli_full_pipeline_with_mocked_openai_and_tiny_pdf(tmp_path, monkeypatch
     assert report["skipped"] == 0
     assert report["records"][0]["page"] == 1
     assert report["records"][0]["score"] >= 0.88
+
+
+def test_cli_rejects_invalid_detail_override(tmp_path):
+    app_root = tmp_path / "app"
+    app_root.mkdir()
+    config_path = _write_config(app_root)
+    pdf_path = app_root / "paper.pdf"
+    _write_tiny_pdf(pdf_path)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "--config",
+            str(config_path),
+            "--detail",
+            "nonsense",
+            str(pdf_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Invalid CLI override" in result.output
+
+
+def test_cli_processing_failure_exits_nonzero(tmp_path, monkeypatch):
+    app_root = tmp_path / "app"
+    app_root.mkdir()
+    config_path = _write_config(app_root)
+    pdf_path = app_root / "paper.pdf"
+    _write_tiny_pdf(pdf_path)
+
+    async def failing_batch_process(*args, **kwargs):
+        raise RuntimeError("pipeline failed")
+
+    monkeypatch.setattr(cli, "batch_process", failing_batch_process)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "--config",
+            str(config_path),
+            str(pdf_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Error during processing: pipeline failed" in result.output
+
+
+def test_cli_rejects_quotes_file_with_multiple_pdfs(tmp_path):
+    app_root = tmp_path / "app"
+    app_root.mkdir()
+    config_path = _write_config(app_root)
+    first_pdf = app_root / "first.pdf"
+    second_pdf = app_root / "second.pdf"
+    quotes_path = app_root / "quotes.json"
+    _write_tiny_pdf(first_pdf)
+    _write_tiny_pdf(second_pdf)
+    quotes_path.write_text('{"key_takeaways": "", "quotes": {}}', encoding="utf-8")
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "--config",
+            str(config_path),
+            "--quotes-file",
+            str(quotes_path),
+            str(first_pdf),
+            str(second_pdf),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "--quotes-file can be used with exactly one PDF." in result.output
