@@ -33,6 +33,7 @@ paperflux --config config.yaml path/to/paper.pdf
 - Markdown summary with sticky note
 - Quote-match report with matched/skipped counts and scores
 - Layout-aware quote matching across column, table, figure, and caption interruptions
+- Stage-level CLI progress during extraction and annotation
 - Configurable prompts and colors
 
 ## Documentation

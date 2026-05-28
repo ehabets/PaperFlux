@@ -157,6 +157,14 @@ def test_cli_full_pipeline_with_mocked_openai_and_tiny_pdf(tmp_path, monkeypatch
     assert "contributions" in response_requests[0]["input"][1]["content"]
     assert "Input" in result.output
     assert "Processing" in result.output
+    assert "[1/1] Processing paper.pdf" in result.output
+    assert "Creating temporary vector store" in result.output
+    assert "Uploading and indexing paper.pdf" in result.output
+    assert "Extracting quotes with OpenAI" in result.output
+    assert "Generating summary" in result.output
+    assert "Cleaning up temporary vector store" in result.output
+    assert "Annotating PDF and matching quotes" in result.output
+    assert "Writing markdown, quotes, and match report" in result.output
     assert "Outputs" in result.output
     assert "Quote Matches" in result.output
     assert "- Summary: 1/1 matched, 0 skipped" in result.output
@@ -174,6 +182,60 @@ def test_cli_full_pipeline_with_mocked_openai_and_tiny_pdf(tmp_path, monkeypatch
     assert report["skipped"] == 0
     assert report["records"][0]["page"] == 1
     assert report["records"][0]["score"] >= 0.88
+
+
+def test_cli_no_progress_disables_stage_callback(tmp_path, monkeypatch):
+    app_root = tmp_path / "app"
+    app_root.mkdir()
+    config_path = _write_config(app_root)
+    pdf_path = app_root / "paper.pdf"
+    output_dir = app_root / "out"
+    _write_tiny_pdf(pdf_path)
+    captured = {}
+
+    async def fake_batch_process(
+        pdf_paths,
+        cfg,
+        verbose,
+        output_dir=None,
+        show_progress=True,
+        progress_callback=None,
+    ):
+        captured["show_progress"] = show_progress
+        captured["progress_callback"] = progress_callback
+        target_dir = output_dir or pdf_paths[0].parent
+        target_dir.mkdir(parents=True, exist_ok=True)
+        pdf_out = target_dir / "paper_annotated.pdf"
+        md_out = target_dir / "paper_summary.md"
+        quotes_out = target_dir / "paper_quotes.json"
+        match_report_out = target_dir / "paper_quote_matches.json"
+        pdf_out.write_bytes(b"%PDF-1.4\n")
+        md_out.write_text("# Summary\n", encoding="utf-8")
+        quotes_out.write_text('{"quotes": {}}', encoding="utf-8")
+        match_report_out.write_text(
+            json.dumps({"total": 0, "matched": 0, "skipped": 0, "records": []}),
+            encoding="utf-8",
+        )
+        return [(pdf_out, md_out, quotes_out, match_report_out)]
+
+    monkeypatch.setattr(cli, "batch_process", fake_batch_process)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "--config",
+            str(config_path),
+            "--output-dir",
+            str(output_dir),
+            "--no-progress",
+            str(pdf_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["show_progress"] is False
+    assert captured["progress_callback"] is None
+    assert "Creating temporary vector store" not in result.output
 
 
 def test_quote_match_report_prints_details_only_when_verbose(tmp_path, capsys):

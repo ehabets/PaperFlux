@@ -2,13 +2,15 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 from openai import OpenAI, AsyncOpenAI
 from .config import Config
 from jinja2 import Environment, FileSystemLoader
 
 logger = logging.getLogger(__name__)
+
+ProgressCallback = Callable[[str], None]
 
 
 def _resolve_config_path(path: Union[str, Path], cfg: Config) -> Path:
@@ -168,15 +170,17 @@ def _extract_parsed_json(resp: Any) -> Optional[dict]:
     return None
 
 
-async def analyze_pdf(path: Path, cfg: Config) -> dict:
+async def analyze_pdf(
+    path: Path,
+    cfg: Config,
+    progress_callback: Optional[ProgressCallback] = None,
+) -> dict:
     """
     Use OpenAI Responses API with built-in file_search tool to retrieve per-category evidence
     and synthesize a global summary. Retrieval happens server-side with tool_choice='auto'.
     - Creates a vector store
     - Uploads the PDF
-    - For each category, runs responses.create with tools=[file_search] and tool_choice='auto'
-      so the model can issue follow-up file_search calls (re-query, re-rank) automatically.
-    - Executes category requests in parallel.
+    - Runs one bundled category extraction response with file_search enabled.
     - Generates a final markdown summary from category summaries.
     """
     # Sync client used for vector store creation/upload (simpler surface)
@@ -185,6 +189,8 @@ async def analyze_pdf(path: Path, cfg: Config) -> dict:
 
     try:
         # 1) Create vector store and upload PDF
+        if progress_callback:
+            progress_callback("Creating temporary vector store")
         vector_store = client_sync.vector_stores.create(
             name="PaperFlux Vector Store",
             expires_after={
@@ -193,6 +199,8 @@ async def analyze_pdf(path: Path, cfg: Config) -> dict:
             },
         )
         vector_store_id = vector_store.id
+        if progress_callback:
+            progress_callback(f"Uploading and indexing {path.name}")
         with open(path, "rb") as f:
             client_sync.vector_stores.files.upload_and_poll(
                 vector_store_id=vector_store_id,
@@ -252,6 +260,8 @@ async def analyze_pdf(path: Path, cfg: Config) -> dict:
         if cfg.rag.include_search_results:
             kwargs["include"] = ["file_search_call.results"]
         kwargs["reasoning"] = reasoning_payload
+        if progress_callback:
+            progress_callback("Extracting quotes with OpenAI")
         multi_resp = await client_async.responses.create(**kwargs)
         _ensure_response_completed(multi_resp, "Category bundle", cfg.ui.max_output_tokens)
 
@@ -336,6 +346,8 @@ async def analyze_pdf(path: Path, cfg: Config) -> dict:
             "store": False,
         }
         summary_kwargs["reasoning"] = summary_reasoning
+        if progress_callback:
+            progress_callback("Generating summary")
         summary_resp = await client_async.responses.create(**summary_kwargs)
         _ensure_response_completed(summary_resp, "Summary", cfg.ui.max_output_tokens)
         key_takeaways = _extract_response_text(summary_resp)
@@ -344,6 +356,8 @@ async def analyze_pdf(path: Path, cfg: Config) -> dict:
     finally:
         if vector_store_id:
             try:
+                if progress_callback:
+                    progress_callback("Cleaning up temporary vector store")
                 client_sync.vector_stores.delete(vector_store_id=vector_store_id)
             except Exception as exc:
                 logger.warning("Failed to delete vector store %s: %s", vector_store_id, exc)

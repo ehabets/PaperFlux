@@ -5,10 +5,13 @@ Handles PDF annotation and markdown generation.
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .config import Config
 from .io_pdf import annotate_pdf, save_markdown
+
+ProgressCallback = Callable[[str], None]
+
 
 def finalize_output(
     pdf_path: Path, 
@@ -16,6 +19,7 @@ def finalize_output(
     md_note: str, 
     cfg: Config,
     output_dir: Optional[Path] = None,
+    progress_callback: Optional[ProgressCallback] = None,
 ) -> Tuple[Path, Path, Path, Path]:
     """
     Annotates the PDF, builds the full markdown content, and saves both.
@@ -26,12 +30,15 @@ def finalize_output(
         md_note: The base markdown note (e.g., key takeaways).
         cfg: Application configuration.
         output_dir: Optional directory where output files should be saved.
+        progress_callback: Optional callback for stage-level progress updates.
 
     Returns:
         Tuple[Path, Path, Path, Path]: Paths to the annotated PDF, markdown,
             quotes JSON, and quote-match report JSON.
     """
     # Annotate PDF
+    if progress_callback:
+        progress_callback("Annotating PDF and matching quotes")
     pdf_out, match_report = annotate_pdf(
         pdf_path,
         quotes,
@@ -97,6 +104,9 @@ def finalize_output(
                 f"{entry['text']}\n"
             )
             
+    if progress_callback:
+        progress_callback("Writing markdown, quotes, and match report")
+
     # Save markdown
     md_out = save_markdown(pdf_path, full_md, output_dir=output_dir)
 

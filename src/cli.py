@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -35,6 +36,24 @@ def _echo_section(title: str) -> None:
 
 def _format_plural(count: int, singular: str, plural: Optional[str] = None) -> str:
     return f"{count} {singular if count == 1 else plural or singular + 's'}"
+
+
+def _format_elapsed(seconds: float) -> str:
+    total_seconds = max(0, int(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+class _StageProgress:
+    def __init__(self) -> None:
+        self._started_at = time.monotonic()
+
+    def __call__(self, message: str) -> None:
+        elapsed = _format_elapsed(time.monotonic() - self._started_at)
+        typer.echo(f"  {elapsed} {message}")
 
 
 def _echo_run_context(
@@ -149,7 +168,7 @@ def main(
     detail: str = typer.Option(None, "--detail", "-d", help="Detail level (low, medium, high)"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose output"),
     output_dir: Optional[str] = typer.Option(None, "--output-dir", "-o", help="Directory to write outputs"),
-    progress: bool = typer.Option(True, "--progress/--no-progress", help="Show per-file progress updates"),
+    progress: bool = typer.Option(True, "--progress/--no-progress", help="Show stage-level progress updates"),
     quotes_file: Optional[str] = typer.Option(None, "--quotes-file", help="Path to JSON quotes file to annotate without rerunning extraction"),
 ):
     """
@@ -213,7 +232,10 @@ def main(
         )
         _echo_section("Processing")
         typer.echo(f"- Annotating {pdf_paths[0].name}")
+        progress_reporter = _StageProgress() if progress else None
         try:
+            if progress_reporter:
+                progress_reporter(f"Loading saved quotes from {quotes_path.name}")
             quotes_payload = json.loads(quotes_path.read_text())
         except Exception as exc:
             typer.echo(f"Failed to read quotes file: {exc}", err=True)
@@ -223,7 +245,12 @@ def main(
         pdf_path = pdf_paths[0]
         try:
             pdf_out, md_out, quotes_out, match_report_out = finalize_output(
-                pdf_path, quotes, md_note, cfg, output_dir=output_dir_path
+                pdf_path,
+                quotes,
+                md_note,
+                cfg,
+                output_dir=output_dir_path,
+                progress_callback=progress_reporter,
             )
         except Exception as exc:
             typer.echo(f"Error during annotation: {exc}", err=True)
@@ -240,6 +267,7 @@ def main(
     )
     _echo_section("Processing")
     typer.echo(f"- Processing {_format_plural(len(pdf_paths), 'PDF')}")
+    progress_reporter = _StageProgress() if progress else None
     try:
         results = asyncio.run(
             batch_process(
@@ -248,6 +276,7 @@ def main(
                 verbose,
                 output_dir=output_dir_path,
                 show_progress=progress,
+                progress_callback=progress_reporter,
             )
         )
         for pdf_out, md_out, quotes_out, match_report_out in results:

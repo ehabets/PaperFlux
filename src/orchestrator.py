@@ -5,27 +5,36 @@ Coordinates the entire pipeline from PDF extraction to annotation.
 
 import logging
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import Callable, List, Optional, Tuple
 
 from .config import Config
 from .utils import finalize_output
 from .assistants import analyze_pdf
 
-logger = logging.getLogger(__name__)
+ProgressCallback = Callable[[str], None]
 
 
-
-
-async def run_pipeline(pdf_path: Path, cfg: Config, output_dir: Optional[Path] = None) -> Tuple[Path, Path, Path, Path]:
+async def run_pipeline(
+    pdf_path: Path,
+    cfg: Config,
+    output_dir: Optional[Path] = None,
+    progress_callback: Optional[ProgressCallback] = None,
+) -> Tuple[Path, Path, Path, Path]:
     """
     Run the complete pipeline on a PDF file via the Responses API.
     """
     # Invoke the OpenAI analysis workflow.
-    result = await analyze_pdf(pdf_path, cfg)
+    result = await analyze_pdf(pdf_path, cfg, progress_callback=progress_callback)
     md_note = result["key_takeaways"]
     quotes = result["quotes"]
-    # Use the new utility function
-    return finalize_output(pdf_path, quotes, md_note, cfg, output_dir=output_dir)
+    return finalize_output(
+        pdf_path,
+        quotes,
+        md_note,
+        cfg,
+        output_dir=output_dir,
+        progress_callback=progress_callback,
+    )
 
 
 async def batch_process(
@@ -34,6 +43,7 @@ async def batch_process(
     verbose: bool = False,
     output_dir: Optional[Path] = None,
     show_progress: bool = True,
+    progress_callback: Optional[ProgressCallback] = None,
 ) -> List[Tuple[Path, Path, Path, Path]]:
     """
     Process multiple PDF files in sequence.
@@ -42,6 +52,9 @@ async def batch_process(
         pdf_paths: List of paths to PDF files
         cfg: Application configuration
         verbose: Whether to enable verbose logging
+        output_dir: Optional directory where output files should be saved.
+        show_progress: Whether to emit progress updates.
+        progress_callback: Optional callback for stage-level progress updates.
         
     Returns:
         List[Tuple[Path, Path, Path, Path]]: List of output paths
@@ -53,8 +66,9 @@ async def batch_process(
     results = []
     total = len(pdf_paths)
     for index, pdf_path in enumerate(pdf_paths, start=1):
-        if show_progress:
-            logger.info(f"[{index}/{total}] Processing {pdf_path.name}")
+        emit_progress = progress_callback if show_progress else None
+        if emit_progress:
+            emit_progress(f"[{index}/{total}] Processing {pdf_path.name}")
         handler = None
         if verbose:
             log_file = pdf_path.with_suffix('.log')
@@ -64,7 +78,12 @@ async def batch_process(
             handler.setFormatter(formatter)
             logging.getLogger().addHandler(handler)
         try:
-            pdf_out, md_out, quotes_out, match_report_out = await run_pipeline(pdf_path, cfg, output_dir=output_dir)
+            pdf_out, md_out, quotes_out, match_report_out = await run_pipeline(
+                pdf_path,
+                cfg,
+                output_dir=output_dir,
+                progress_callback=emit_progress,
+            )
             results.append((pdf_out, md_out, quotes_out, match_report_out))
         finally:
             if handler:
