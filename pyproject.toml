@@ -34,6 +34,13 @@ paperflux = "paperflux.cli:run"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+paperflux = [
+    "templates/config.yaml",
+    "templates/prompts/*.j2",
+    "templates/prompts/*.txt",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

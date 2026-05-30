@@ -21,6 +21,7 @@ export OPENAI_API_KEY="sk-your-key"
 ### 3. Run
 
 ```bash
+paperflux init
 paperflux --config config.yaml path/to/paper.pdf
 ```
 

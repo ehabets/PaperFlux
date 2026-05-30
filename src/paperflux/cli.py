@@ -4,7 +4,9 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
+from importlib.resources import files
 from pathlib import Path
 from typing import List, Optional
 
@@ -15,6 +17,13 @@ from .config import Config, load
 from .orchestrator import batch_process
 
 app = typer.Typer(add_completion=False)
+_COMMANDS = {"run", "init"}
+_INIT_TEMPLATE_FILES = (
+    ("config.yaml", "config.yaml"),
+    ("prompts/rag_category_prompt.j2", "prompts/rag_category_prompt.j2"),
+    ("prompts/rag_category_system_prompt.txt", "prompts/rag_category_system_prompt.txt"),
+    ("prompts/rag_summary_prompt.j2", "prompts/rag_summary_prompt.j2"),
+)
 
 
 def _apply_cli_overrides(cfg: Config, *, detail: Optional[str] = None) -> Config:
@@ -36,6 +45,12 @@ def _echo_section(title: str) -> None:
 
 def _format_plural(count: int, singular: str, plural: Optional[str] = None) -> str:
     return f"{count} {singular if count == 1 else plural or singular + 's'}"
+
+
+def _entrypoint_args(args: List[str]) -> List[str]:
+    if args and args[0] not in _COMMANDS and args[0] not in {"--help", "-h"}:
+        return ["run", *args]
+    return args
 
 
 def _format_elapsed(seconds: float) -> str:
@@ -161,7 +176,43 @@ def _echo_quote_match_report(report_path: Path, *, verbose: bool = False) -> Non
             )
 
 
-@app.command(name="")  # Empty name makes this the default command
+def _write_init_templates(target_dir: Path, *, force: bool = False) -> None:
+    template_root = files("paperflux").joinpath("templates")
+    planned_files = [
+        (template_root.joinpath(source), target_dir / destination)
+        for source, destination in _INIT_TEMPLATE_FILES
+    ]
+    existing_files = [destination for _, destination in planned_files if destination.exists()]
+    if existing_files and not force:
+        typer.echo("Refusing to overwrite existing files:", err=True)
+        for path in existing_files:
+            typer.echo(f"- {path}", err=True)
+        typer.echo("Use --force to overwrite them.", err=True)
+        raise typer.Exit(code=1)
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for source, destination in planned_files:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+@app.command()
+def init(
+    target_dir: Path = typer.Argument(
+        Path("."),
+        help="Directory where config.yaml and prompt templates should be created",
+    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing files"),
+) -> None:
+    """Create a starter PaperFlux config and prompt templates."""
+    target_dir = target_dir.resolve()
+    _write_init_templates(target_dir, force=force)
+    typer.echo(f"Initialized PaperFlux project in: {target_dir}")
+    typer.echo(f"- Config: {target_dir / 'config.yaml'}")
+    typer.echo(f"- Prompts: {target_dir / 'prompts'}")
+
+
+@app.command("run")
 def main(
     pdfs: List[str] = typer.Argument(..., help="PDF files to analyze"),
     config: str = typer.Option(..., "--config", "-c", help="Path to config.yaml"),
@@ -288,7 +339,16 @@ def main(
 
 def run() -> None:
     """Console script entry point."""
-    app(prog_name="PaperFlux")
+    args = _entrypoint_args(sys.argv[1:])
+    if args != sys.argv[1:]:
+        original_argv = sys.argv[:]
+        sys.argv = [sys.argv[0], *args]
+        try:
+            app(prog_name="paperflux")
+        finally:
+            sys.argv = original_argv
+        return
+    app(prog_name="paperflux")
 
 
 if __name__ == "__main__":

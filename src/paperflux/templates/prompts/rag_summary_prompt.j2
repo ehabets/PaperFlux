@@ -1,0 +1,14 @@
+You are summarizing a scientific paper for a researcher.
+
+Detail level: {{ detail_level }}
+
+Use the category summaries below to write a concise Markdown summary with:
+- Key contributions
+- Important claims and evidence
+- Limitations or caveats
+- Practical takeaways
+
+{% for category, summary in category_summaries.items() %}
+## {{ category }}
+{{ summary }}
+{% endfor %}

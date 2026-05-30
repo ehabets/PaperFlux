@@ -1,0 +1,22 @@
+Analyze the paper for the following categories and produce structured evidence:
+
+{% for cat in categories -%}
+- {{ cat.name }}: {{ cat.description }}
+{% endfor %}
+
+Return at most {{ max_quotes_per_category }} quotes per category. Prefer the strongest, most direct evidence.
+Each quote text must be copied exactly from the paper. Do not paraphrase, smooth grammar, merge non-adjacent fragments, or use ellipses.
+For each quote, include a short exact prefix and suffix from the same paragraph when available. The prefix and suffix should be adjacent context, not part of the quote itself.
+
+Return one JSON object (no code fences or commentary) like:
+{
+  "categories": [
+    {
+      "name": "<category_name>",
+      "quotes": [
+        {"text": "...", "pages": [1], "prefix": "...", "suffix": "..."}
+      ],
+      "category_summary": "..."
+    }
+  ]
+}

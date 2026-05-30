@@ -1,0 +1,33 @@
+openai:
+  api_key: "ENV:OPENAI_API_KEY"
+  model: "gpt-5.4-mini"
+
+ui:
+  detail_level: "medium"
+  reasoning_effort: "medium"
+  max_output_tokens: 32768
+  highlight_colors:
+    contributions: [1.0, 1.0, 0.0]
+    limitations: [1.0, 0.6, 0.0]
+    claims: [0.4, 0.6, 1.0]
+    evidence: [0.0, 0.8, 0.3]
+
+extraction_categories:
+  categories:
+    contributions: "Significant advancements, novel methods, or key findings presented in the paper."
+    limitations: "Identified shortcomings, constraints, or areas where the research or methodology falls short."
+    claims: "Specific assertions or hypotheses made by the authors that are central to the paper's arguments."
+    evidence: "Data, experimental results, or logical arguments provided to support the claims made."
+
+matching:
+  min_similarity: 0.88
+  max_window_tokens: 80
+
+rag:
+  category_prompt_file: "prompts/rag_category_prompt.j2"
+  category_system_prompt_file: "prompts/rag_category_system_prompt.txt"
+  summary_prompt_file: "prompts/rag_summary_prompt.j2"
+  max_num_results:
+  max_quotes_per_category: 8
+  include_search_results: false
+  vector_store_expires_after_days: 1

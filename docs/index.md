@@ -91,6 +91,7 @@ Choose one of the following setups:
 Run the CLI:
 
 ```bash
+paperflux init
 paperflux --config config.yaml path/to/your.pdf
 # or reuse prior quotes without extraction
 paperflux --config config.yaml --quotes-file your_paper_quotes.json path/to/your.pdf
@@ -104,6 +105,8 @@ paperflux --config config.yaml --quotes-file your_paper_quotes.json path/to/your
 - `--output-dir`, `-o`: Directory where annotated PDFs and summaries will be saved
 - `--progress/--no-progress`: Show or hide stage-level progress updates with elapsed time (default: shown)
 - `--quotes-file`: Path to JSON quotes file to annotate without rerunning extraction
+
+Use `paperflux init [directory]` to create a starter `config.yaml` and editable prompt templates in `prompts/`. Existing files are not overwritten unless you pass `--force`.
 
 ## Customizing Prompts
 

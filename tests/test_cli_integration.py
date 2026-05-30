@@ -141,6 +141,7 @@ def test_cli_full_pipeline_with_mocked_openai_and_tiny_pdf(tmp_path, monkeypatch
     result = CliRunner().invoke(
         cli.app,
         [
+            "run",
             "--config",
             str(config_path),
             "--output-dir",
@@ -223,6 +224,7 @@ def test_cli_no_progress_disables_stage_callback(tmp_path, monkeypatch):
     result = CliRunner().invoke(
         cli.app,
         [
+            "run",
             "--config",
             str(config_path),
             "--output-dir",
@@ -236,6 +238,50 @@ def test_cli_no_progress_disables_stage_callback(tmp_path, monkeypatch):
     assert captured["show_progress"] is False
     assert captured["progress_callback"] is None
     assert "Creating temporary vector store" not in result.output
+
+
+def test_cli_init_writes_config_and_prompt_templates(tmp_path):
+    target_dir = tmp_path / "paperflux-project"
+
+    result = CliRunner().invoke(cli.app, ["init", str(target_dir)])
+
+    assert result.exit_code == 0, result.output
+    assert f"Initialized PaperFlux project in: {target_dir}" in result.output
+    config_path = target_dir / "config.yaml"
+    assert config_path.exists()
+    assert (target_dir / "prompts" / "rag_category_prompt.j2").exists()
+    assert (target_dir / "prompts" / "rag_category_system_prompt.txt").exists()
+    assert (target_dir / "prompts" / "rag_summary_prompt.j2").exists()
+    assert 'api_key: "ENV:OPENAI_API_KEY"' in config_path.read_text(encoding="utf-8")
+
+
+def test_cli_init_refuses_to_overwrite_without_force(tmp_path):
+    target_dir = tmp_path / "paperflux-project"
+    target_dir.mkdir()
+    config_path = target_dir / "config.yaml"
+    config_path.write_text("custom: true\n", encoding="utf-8")
+
+    result = CliRunner().invoke(cli.app, ["init", str(target_dir)])
+
+    assert result.exit_code == 1
+    assert "Refusing to overwrite existing files:" in result.output
+    assert config_path.read_text(encoding="utf-8") == "custom: true\n"
+
+    force_result = CliRunner().invoke(cli.app, ["init", str(target_dir), "--force"])
+
+    assert force_result.exit_code == 0, force_result.output
+    assert 'api_key: "ENV:OPENAI_API_KEY"' in config_path.read_text(encoding="utf-8")
+
+
+def test_console_entrypoint_preserves_legacy_run_invocation():
+    assert cli._entrypoint_args(["--config", "config.yaml", "paper.pdf"]) == [
+        "run",
+        "--config",
+        "config.yaml",
+        "paper.pdf",
+    ]
+    assert cli._entrypoint_args(["init"]) == ["init"]
+    assert cli._entrypoint_args(["--help"]) == ["--help"]
 
 
 def test_quote_match_report_prints_details_only_when_verbose(tmp_path, capsys):
@@ -307,6 +353,7 @@ def test_cli_rejects_invalid_detail_override(tmp_path):
     result = CliRunner().invoke(
         cli.app,
         [
+            "run",
             "--config",
             str(config_path),
             "--detail",
@@ -334,6 +381,7 @@ def test_cli_processing_failure_exits_nonzero(tmp_path, monkeypatch):
     result = CliRunner().invoke(
         cli.app,
         [
+            "run",
             "--config",
             str(config_path),
             str(pdf_path),
@@ -358,6 +406,7 @@ def test_cli_rejects_quotes_file_with_multiple_pdfs(tmp_path):
     result = CliRunner().invoke(
         cli.app,
         [
+            "run",
             "--config",
             str(config_path),
             "--quotes-file",
