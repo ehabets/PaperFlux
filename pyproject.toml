@@ -12,6 +12,19 @@ license = { file = "LICENSE" }
 authors = [
     { name = "PaperFlux contributors" },
 ]
+keywords = ["annotation", "openai", "papers", "pdf", "research"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
 dependencies = [
     "openai>=2.38.0",
     "typer>=0.15.4",
@@ -30,6 +43,12 @@ dev = [
 
 [project.scripts]
 paperflux = "paperflux.cli:run"
+
+[project.urls]
+Documentation = "https://ehabets.github.io/PaperFlux/"
+Homepage = "https://github.com/ehabets/PaperFlux"
+Issues = "https://github.com/ehabets/PaperFlux/issues"
+Source = "https://github.com/ehabets/PaperFlux"
 
 [tool.setuptools.packages.find]
 where = ["src"]
