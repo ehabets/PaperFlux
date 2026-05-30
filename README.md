@@ -1,6 +1,6 @@
 # PaperFlux
 
-AI-powered PDF annotation for research papers. PaperFlux extracts exact quotations, organizes them by category (contributions, limitations, claims, evidence), and annotates your PDFs with precise highlights.
+AI-powered PDF annotation for research papers. PaperFlux extracts exact quotations, organizes them by category (contributions, limitations, claims, evidence), and annotates your PDFs with precise highlights. It works with either OpenAI or Anthropic (Claude) models.
 
 ## Quick Start
 
@@ -22,9 +22,17 @@ pip install -e ".[dev]"
 
 ### 2. Set API Key
 
+PaperFlux uses OpenAI by default. Set the key for the provider you plan to use:
+
 ```bash
+# OpenAI (default)
 export PAPERFLUX_OPENAI_API_KEY="sk-your-key"
+
+# Anthropic (when provider: "anthropic")
+export PAPERFLUX_ANTHROPIC_API_KEY="sk-ant-your-key"
 ```
+
+Select the backend with the `provider` key in `config.yaml` (`"openai"` or `"anthropic"`).
 
 ### 3. Run
 
@@ -35,6 +43,7 @@ paperflux --config config.yaml path/to/paper.pdf
 
 ## Features
 
+- Pluggable LLM backend: OpenAI or Anthropic (Claude)
 - Batch processing: `*.pdf`
 - Three detail levels (low/medium/high)
 - RAG-based extraction with exact quotes
