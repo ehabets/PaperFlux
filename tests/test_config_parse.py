@@ -1,6 +1,6 @@
 import pytest
 
-from src.config import Config, load
+from paperflux.config import Config, load
 
 def test_config_parse(tmp_path):
     # Create a sample config.yaml file

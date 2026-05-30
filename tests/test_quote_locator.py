@@ -1,4 +1,4 @@
-from src.quote_locator import locate_quote_in_words, normalize_token
+from paperflux.quote_locator import locate_quote_in_words, normalize_token
 
 
 def _word(x0, y0, x1, y1, text, block=0, line=0, word_no=0):

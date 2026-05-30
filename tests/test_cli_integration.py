@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import fitz
 from typer.testing import CliRunner
 
-from src import cli
+from paperflux import cli
 
 
 def _write_tiny_pdf(path):
@@ -134,8 +134,8 @@ def test_cli_full_pipeline_with_mocked_openai_and_tiny_pdf(tmp_path, monkeypatch
             self.api_key = api_key
             self.responses = FakeResponses()
 
-    monkeypatch.setattr("src.assistants.OpenAI", FakeOpenAI)
-    monkeypatch.setattr("src.assistants.AsyncOpenAI", FakeAsyncOpenAI)
+    monkeypatch.setattr("paperflux.assistants.OpenAI", FakeOpenAI)
+    monkeypatch.setattr("paperflux.assistants.AsyncOpenAI", FakeAsyncOpenAI)
     monkeypatch.chdir(outside_cwd)
 
     result = CliRunner().invoke(

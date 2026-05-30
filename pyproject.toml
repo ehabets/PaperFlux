@@ -29,11 +29,11 @@ dev = [
 ]
 
 [project.scripts]
-paperflux = "src.cli:run"
+paperflux = "paperflux.cli:run"
 
-[tool.setuptools]
-packages = ["src"]
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = ["src"]
 testpaths = ["tests"]
