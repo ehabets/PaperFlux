@@ -6,6 +6,14 @@ AI-powered PDF annotation for research papers. PaperFlux extracts exact quotatio
 
 ### 1. Installation
 
+Install the latest release from PyPI:
+
+```bash
+python -m pip install paperflux
+```
+
+For local development from a cloned repository:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate

@@ -33,7 +33,13 @@ PaperFlux helps you read scientific papers faster by automatically extracting ex
 
 ### 1. Installation
 
-Quick start (local):
+Install the latest release from PyPI:
+
+```bash
+python -m pip install paperflux
+```
+
+For local development from a cloned repository:
 
 ```bash
 python -m venv .venv
