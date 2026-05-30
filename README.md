@@ -15,7 +15,7 @@ pip install -e ".[dev]"
 ### 2. Set API Key
 
 ```bash
-export OPENAI_API_KEY="sk-your-key"
+export PAPERFLUX_OPENAI_API_KEY="sk-your-key"
 ```
 
 ### 3. Run

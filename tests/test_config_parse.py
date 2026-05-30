@@ -78,3 +78,34 @@ rag:
         load(config_file)
 
     assert "Highlight colors missing" in str(excinfo.value)
+
+
+def test_missing_env_var_error_names_exact_variable(tmp_path, monkeypatch):
+    monkeypatch.delenv("PAPERFLUX_OPENAI_API_KEY", raising=False)
+    config_content = """
+openai:
+  api_key: "ENV:PAPERFLUX_OPENAI_API_KEY"
+  model: "gpt-5.4-mini"
+
+ui:
+  detail_level: "medium"
+  highlight_colors:
+    contributions: [1.0, 1.0, 0.0]
+
+extraction_categories:
+  categories:
+    contributions: "..."
+
+rag:
+  category_prompt_file: "prompts/rag_category_prompt.j2"
+  summary_prompt_file: "prompts/rag_summary_prompt.j2"
+"""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(config_content)
+
+    with pytest.raises(ValueError) as excinfo:
+        load(config_file)
+
+    message = str(excinfo.value)
+    assert "PAPERFLUX_OPENAI_API_KEY" in message
+    assert "export PAPERFLUX_OPENAI_API_KEY=..." in message

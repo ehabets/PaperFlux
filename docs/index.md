@@ -49,23 +49,23 @@ PaperFlux requires an OpenAI API key. The key is read from an environment variab
 
 	```yaml
 	openai:
-		api_key: "ENV:OPENAI_API_KEY"
+		api_key: "ENV:PAPERFLUX_OPENAI_API_KEY"
 	```
 
-	The `ENV:` prefix means PaperFlux will expand the environment variable `OPENAI_API_KEY` at runtime.
+	The `ENV:` prefix means PaperFlux will expand the environment variable `PAPERFLUX_OPENAI_API_KEY` at runtime. A PaperFlux-specific OpenAI key makes it easier to monitor package-related usage and cost separately.
 
 Choose one of the following setups:
 
 - Temporary (current shell only):
 
 	```bash
-	export OPENAI_API_KEY="sk-your-key"
+	export PAPERFLUX_OPENAI_API_KEY="sk-your-key"
 	```
 
 - Persistent for zsh (macOS default):
 
 	```bash
-	echo 'export OPENAI_API_KEY="sk-your-key"' >> ~/.zshrc
+	echo 'export PAPERFLUX_OPENAI_API_KEY="sk-your-key"' >> ~/.zshrc
 	source ~/.zshrc
 	```
 
@@ -74,7 +74,7 @@ Choose one of the following setups:
 	Create a file named `.env` in the repository root:
 
 	```bash
-	echo 'OPENAI_API_KEY=sk-your-key' > .env
+	echo 'PAPERFLUX_OPENAI_API_KEY=sk-your-key' > .env
 	```
 
 	PaperFlux loads `.env` automatically because it calls `load_dotenv()` during config load.
@@ -183,7 +183,7 @@ The highlighter first tries exact and fuzzy contiguous matching. If those fail, 
 - v3.1.20251116: Introduced a `--quotes-file` flow to re-annotate quickly without re-running extraction.
 - v3.2.20260527: Updated default model to GPT-5.4 mini and added file-search tuning options.
 - v3.3.20260527: Added local quote span alignment for more accurate PDF highlights.
-- v3.4.20260528: Added layout-gap quote matching for quotes split by tables, figures, captions, or column breaks; added quote-match reports, stage-level CLI progress, concise default CLI output with verbose diagnostics, package metadata, and CLI validation improvements.
+- v3.4.20260528: Added layout-gap quote matching for quotes split by tables, figures, captions, or column breaks; added quote-match reports, stage-level CLI progress, concise default CLI output with verbose diagnostics, package metadata, CLI validation improvements, and the `PAPERFLUX_OPENAI_API_KEY` default for easier cost tracking.
 
 ## Contributing
 

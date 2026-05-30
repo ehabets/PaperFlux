@@ -106,7 +106,7 @@ def _expand_env_vars(value: str) -> str:
         if env_var not in os.environ:
             raise ValueError(
                 f"Environment variable '{env_var}' referenced in the configuration is not set. "
-                "Set it (e.g., export OPENAI_API_KEY=...) or replace the config value."
+                f"Set it (e.g., export {env_var}=...) or replace the config value."
             )
         return os.environ[env_var]
     return value

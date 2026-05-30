@@ -252,7 +252,9 @@ def test_cli_init_writes_config_and_prompt_templates(tmp_path):
     assert (target_dir / "prompts" / "rag_category_prompt.j2").exists()
     assert (target_dir / "prompts" / "rag_category_system_prompt.txt").exists()
     assert (target_dir / "prompts" / "rag_summary_prompt.j2").exists()
-    assert 'api_key: "ENV:OPENAI_API_KEY"' in config_path.read_text(encoding="utf-8")
+    assert 'api_key: "ENV:PAPERFLUX_OPENAI_API_KEY"' in config_path.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_cli_init_refuses_to_overwrite_without_force(tmp_path):
@@ -270,7 +272,9 @@ def test_cli_init_refuses_to_overwrite_without_force(tmp_path):
     force_result = CliRunner().invoke(cli.app, ["init", str(target_dir), "--force"])
 
     assert force_result.exit_code == 0, force_result.output
-    assert 'api_key: "ENV:OPENAI_API_KEY"' in config_path.read_text(encoding="utf-8")
+    assert 'api_key: "ENV:PAPERFLUX_OPENAI_API_KEY"' in config_path.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_console_entrypoint_preserves_legacy_run_invocation():

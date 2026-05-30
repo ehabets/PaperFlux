@@ -1,5 +1,5 @@
 openai:
-  api_key: "ENV:OPENAI_API_KEY"
+  api_key: "ENV:PAPERFLUX_OPENAI_API_KEY"
   model: "gpt-5.4-mini"
 
 ui:
