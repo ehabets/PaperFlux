@@ -22,6 +22,10 @@ _INIT_TEMPLATE_FILES = (
     ("config.yaml", "config.yaml"),
     ("prompts/rag_category_prompt.j2", "prompts/rag_category_prompt.j2"),
     ("prompts/rag_category_system_prompt.txt", "prompts/rag_category_system_prompt.txt"),
+    (
+        "prompts/rag_category_system_prompt_anthropic.txt",
+        "prompts/rag_category_system_prompt_anthropic.txt",
+    ),
     ("prompts/rag_summary_prompt.j2", "prompts/rag_summary_prompt.j2"),
 )
 

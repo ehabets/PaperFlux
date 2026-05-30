@@ -1,6 +1,14 @@
+# Which LLM backend to use: "openai" or "anthropic".
+provider: "openai"
+
 openai:
   api_key: "ENV:PAPERFLUX_OPENAI_API_KEY"
   model: "gpt-5.4-mini"
+
+# Used when provider is "anthropic". Claude reads the PDF directly (no vector store).
+# anthropic:
+#   api_key: "ENV:PAPERFLUX_ANTHROPIC_API_KEY"
+#   model: "claude-opus-4-8"
 
 ui:
   detail_level: "medium"

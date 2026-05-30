@@ -65,6 +65,164 @@ rag:
     return config_path
 
 
+def _write_anthropic_config(root):
+    prompts_dir = root / "prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "category.j2").write_text(
+        "Extract {{ max_quotes_per_category }} quote for "
+        "{% for cat in categories %}{{ cat.name }}{% endfor %}.",
+        encoding="utf-8",
+    )
+    (prompts_dir / "system_anthropic.txt").write_text(
+        "Read the attached paper.", encoding="utf-8"
+    )
+    (prompts_dir / "summary.j2").write_text(
+        "{{ detail_level }} summary: "
+        "{% for category, summary in category_summaries.items() %}"
+        "{{ category }}={{ summary }}"
+        "{% endfor %}",
+        encoding="utf-8",
+    )
+
+    config_path = root / "config.yaml"
+    config_path.write_text(
+        """
+provider: "anthropic"
+
+anthropic:
+  api_key: "test-key"
+  model: "claude-test"
+
+ui:
+  detail_level: "low"
+  reasoning_effort: "low"
+  max_output_tokens: 2048
+  highlight_colors:
+    contributions: [1.0, 1.0, 0.0]
+
+extraction_categories:
+  categories:
+    contributions: "Important contributions."
+
+matching:
+  min_similarity: 0.88
+  max_window_tokens: 80
+
+rag:
+  category_prompt_file: "prompts/category.j2"
+  category_system_prompt_file_anthropic: "prompts/system_anthropic.txt"
+  summary_prompt_file: "prompts/summary.j2"
+  max_quotes_per_category: 1
+""",
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def test_cli_full_pipeline_with_mocked_anthropic_and_tiny_pdf(tmp_path, monkeypatch):
+    app_root = tmp_path / "app"
+    app_root.mkdir()
+    config_path = _write_anthropic_config(app_root)
+    pdf_path = app_root / "paper.pdf"
+    output_dir = app_root / "out"
+    outside_cwd = tmp_path / "outside"
+    outside_cwd.mkdir()
+    _write_tiny_pdf(pdf_path)
+
+    stream_requests = []
+
+    class FakeStream:
+        def __init__(self, message):
+            self._message = message
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def get_final_message(self):
+            return self._message
+
+    class FakeMessages:
+        def stream(self, **kwargs):
+            stream_requests.append(kwargs)
+            output_config = kwargs.get("output_config") or {}
+            if output_config.get("format"):
+                payload = {
+                    "categories": [
+                        {
+                            "name": "contributions",
+                            "quotes": [
+                                {
+                                    "text": "This paper introduces a reliable method.",
+                                    "pages": [1],
+                                    "prefix": "",
+                                    "suffix": "",
+                                }
+                            ],
+                            "category_summary": "The paper introduces a reliable method.",
+                        }
+                    ]
+                }
+                text = json.dumps(payload)
+            else:
+                text = "The paper introduces a reliable method."
+            message = SimpleNamespace(
+                stop_reason="end_turn",
+                content=[SimpleNamespace(type="text", text=text)],
+            )
+            return FakeStream(message)
+
+    class FakeAsyncAnthropic:
+        def __init__(self, *, api_key):
+            self.api_key = api_key
+            self.messages = FakeMessages()
+
+    monkeypatch.setattr(
+        "paperflux.providers.anthropic_provider.AsyncAnthropic", FakeAsyncAnthropic
+    )
+    monkeypatch.chdir(outside_cwd)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "run",
+            "--config",
+            str(config_path),
+            "--output-dir",
+            str(output_dir),
+            str(pdf_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    # First call extracts quotes (json_schema format + PDF document block).
+    category_request = stream_requests[0]
+    assert category_request["output_config"]["format"]["type"] == "json_schema"
+    doc_blocks = [
+        block
+        for block in category_request["messages"][0]["content"]
+        if block.get("type") == "document"
+    ]
+    assert doc_blocks and doc_blocks[0]["source"]["media_type"] == "application/pdf"
+    assert "Extracting quotes with Claude" in result.output
+    assert "Generating summary" in result.output
+    assert "Creating temporary vector store" not in result.output
+
+    report_path = output_dir / "paper_quote_matches.json"
+    assert (output_dir / "paper_annotated.pdf").exists()
+    assert (output_dir / "paper_summary.md").exists()
+    assert (output_dir / "paper_quotes.json").exists()
+    assert report_path.exists()
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["matched"] == 1
+    assert report["skipped"] == 0
+    assert report["records"][0]["page"] == 1
+    assert report["records"][0]["score"] >= 0.88
+
+
 def test_cli_full_pipeline_with_mocked_openai_and_tiny_pdf(tmp_path, monkeypatch):
     app_root = tmp_path / "app"
     app_root.mkdir()
@@ -134,8 +292,8 @@ def test_cli_full_pipeline_with_mocked_openai_and_tiny_pdf(tmp_path, monkeypatch
             self.api_key = api_key
             self.responses = FakeResponses()
 
-    monkeypatch.setattr("paperflux.assistants.OpenAI", FakeOpenAI)
-    monkeypatch.setattr("paperflux.assistants.AsyncOpenAI", FakeAsyncOpenAI)
+    monkeypatch.setattr("paperflux.providers.openai_provider.OpenAI", FakeOpenAI)
+    monkeypatch.setattr("paperflux.providers.openai_provider.AsyncOpenAI", FakeAsyncOpenAI)
     monkeypatch.chdir(outside_cwd)
 
     result = CliRunner().invoke(

@@ -51,6 +51,69 @@ rag:
     assert cfg.rag.max_quotes_per_category == 5
 
 
+def test_anthropic_provider_config_parses(tmp_path):
+    config_content = """
+provider: "anthropic"
+
+anthropic:
+  api_key: "testkey"
+  model: "claude-opus-4-8"
+
+ui:
+  detail_level: "medium"
+  reasoning_effort: "high"
+  highlight_colors:
+    contributions: [1.0, 1.0, 0.0]
+
+extraction_categories:
+  categories:
+    contributions: "..."
+
+rag:
+  category_prompt_file: "prompts/rag_category_prompt.j2"
+  summary_prompt_file: "prompts/rag_summary_prompt.j2"
+"""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(config_content)
+
+    cfg = load(config_file)
+
+    assert cfg.provider == "anthropic"
+    assert cfg.anthropic.api_key == "testkey"
+    assert cfg.anthropic.model == "claude-opus-4-8"
+    assert cfg.openai is None
+
+
+def test_provider_without_matching_config_block_errors(tmp_path):
+    config_content = """
+provider: "anthropic"
+
+openai:
+  api_key: "testkey"
+  model: "gpt-5.4-mini"
+
+ui:
+  detail_level: "medium"
+  highlight_colors:
+    contributions: [1.0, 1.0, 0.0]
+
+extraction_categories:
+  categories:
+    contributions: "..."
+
+rag:
+  category_prompt_file: "prompts/rag_category_prompt.j2"
+  summary_prompt_file: "prompts/rag_summary_prompt.j2"
+"""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(config_content)
+
+    with pytest.raises(ValueError) as excinfo:
+        load(config_file)
+
+    assert "anthropic" in str(excinfo.value)
+
+
 def test_missing_highlight_colors(tmp_path):
     config_content = """
 openai:
