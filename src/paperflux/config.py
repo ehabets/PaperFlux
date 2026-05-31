@@ -120,6 +120,10 @@ class Config(BaseModel):
         return self
 
 
+# Provider-specific config blocks; only the selected provider's block is used.
+_PROVIDER_CONFIG_KEYS = ("openai", "anthropic")
+
+
 def _expand_env_vars(value: str) -> str:
     """Expand environment variables in string values."""
     if isinstance(value, str) and value.startswith("ENV:"):
@@ -159,6 +163,14 @@ def load(config_path: Union[str, Path]) -> Config:
 
     with open(config_path, "r") as f:
         config_dict = yaml.safe_load(f)
+
+    # Drop config blocks for non-selected providers so their ENV: references
+    # (e.g. an unused OpenAI key) are not required when another provider is active.
+    if isinstance(config_dict, dict):
+        selected_provider = config_dict.get("provider", "openai")
+        for name in _PROVIDER_CONFIG_KEYS:
+            if name != selected_provider:
+                config_dict.pop(name, None)
 
     # Process environment variables
     config_dict = _process_config_dict(config_dict)
