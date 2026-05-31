@@ -6,17 +6,18 @@ description: AI-powered PDF annotation for research papers
 
 # PaperFlux
 
-PaperFlux helps you read scientific papers faster by automatically extracting exact quotations, organizing them by category (e.g., contributions, limitations, claims, evidence), and annotating your PDFs with precise highlights. It also produces a concise, structured summary you can share or extend. The current version requires an OpenAI API key.
+PaperFlux helps you read scientific papers faster by automatically extracting exact quotations, organizing them by category (e.g., contributions, limitations, claims, evidence), and annotating your PDFs with precise highlights. It also produces a concise, structured summary you can share or extend. PaperFlux works with either OpenAI or Anthropic (Claude) models; you select the backend in `config.yaml` and provide the matching API key.
 
 ## The Idea
 
-- Use Retrieval-Augmented Generation (RAG) to find the most relevant passages inside your paper via server-side file search.
+- Give the model the paper and let it find the most relevant passages: OpenAI uses server-side file search over a temporary vector store, while Anthropic (Claude) reads the PDF directly in context.
 - Ask the model to return structured results (JSON) with exact quotes and page numbers per category.
 - Turn that into actionable artifacts: an annotated PDF with color-coded highlights and a clean Markdown summary.
 - Keep everything reproducible: save the extracted quotes alongside your outputs so you can re-annotate without re-running extraction.
 
 ## Features
 
+- Pluggable LLM backend: OpenAI or Anthropic (Claude), selected via `provider` in config
 - Batch CLI: [options] *.pdf
 - YAML config with LLMs, prompts, colors, defaults
 - Three detail levels (low / medium / high)
@@ -47,20 +48,27 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-### 2. Configure the API Key
+### 2. Choose a Provider and Configure the API Key
 
-PaperFlux requires an OpenAI API key. The key is read from an environment variable referenced in `config.yaml`:
+PaperFlux supports two backends, selected by the `provider` key in `config.yaml`:
 
-- In `config.yaml`, the default is:
+```yaml
+# "openai" (default) or "anthropic"
+provider: "openai"
 
-	```yaml
-	openai:
-		api_key: "ENV:PAPERFLUX_OPENAI_API_KEY"
-	```
+openai:
+	api_key: "ENV:PAPERFLUX_OPENAI_API_KEY"
+	model: "gpt-5.4-mini"
 
-	The `ENV:` prefix means PaperFlux will expand the environment variable `PAPERFLUX_OPENAI_API_KEY` at runtime. A PaperFlux-specific OpenAI key makes it easier to monitor package-related usage and cost separately.
+# Used when provider is "anthropic"
+anthropic:
+	api_key: "ENV:PAPERFLUX_ANTHROPIC_API_KEY"
+	model: "claude-opus-4-8"
+```
 
-Choose one of the following setups:
+Only the selected provider's block is required; PaperFlux validates that the chosen `provider` has a matching configuration block. The `ENV:` prefix means PaperFlux expands the named environment variable at runtime. A PaperFlux-specific key makes it easier to monitor package-related usage and cost separately.
+
+Choose one of the following setups (substitute `PAPERFLUX_ANTHROPIC_API_KEY` and an `sk-ant-` key when using Anthropic):
 
 - Temporary (current shell only):
 
@@ -118,15 +126,15 @@ Use `paperflux init [directory]` to create a starter `config.yaml` and editable 
 
 PaperFlux uses three editable Jinja2 templates in the `prompts/` directory to control how the AI extracts and summarizes information:
 
-### `rag_category_system_prompt.txt`
+### `rag_category_system_prompt.txt` and `rag_category_system_prompt_anthropic.txt`
 
-The system prompt that instructs the AI assistant on its role and behavior. It defines the extraction rules:
-- Use RAG file_search to find relevant passages
+The system prompt that instructs the AI assistant on its role and behavior. PaperFlux uses a provider-specific variant: `rag_category_system_prompt.txt` for OpenAI (which retrieves passages via file_search) and `rag_category_system_prompt_anthropic.txt` for Anthropic (which reads the attached PDF directly). Both define the same extraction rules:
+- Find the relevant passages (file_search for OpenAI; the attached PDF for Anthropic)
 - Extract near-verbatim quotations with accurate page numbers
 - Avoid including section/table/figure references in quotes
 - Return structured JSON without code fences
 
-This is the "personality" of the extraction assistant.
+This is the "personality" of the extraction assistant. The file used for each provider is configurable via `rag.category_system_prompt_file` and `rag.category_system_prompt_file_anthropic`.
 
 ### `rag_category_prompt.j2`
 
@@ -148,9 +156,11 @@ Edit this to change how the final summary is structured or what information it e
 
 All three templates can be customized without modifying any Python code—just edit the files in `prompts/` and rerun PaperFlux.
 
-## OpenAI Model and Retrieval Settings
+## Model and Retrieval Settings
 
-The default model is `gpt-5.4-mini`, which supports the Responses API, structured outputs, and file search. You can change it in `config.yaml`:
+### OpenAI
+
+The default OpenAI model is `gpt-5.4-mini`, which supports the Responses API, structured outputs, and file search. You can change it in `config.yaml`:
 
 ```yaml
 openai:
@@ -177,6 +187,27 @@ rag:
 
 Use `max_num_results` to cap retrieved passages when latency or cost matters. Use `max_quotes_per_category` to keep the structured JSON response bounded. The local highlighter uses `matching.min_similarity` and `matching.max_window_tokens` to align returned quotes to real PDF word spans; raising the similarity threshold improves precision, while lowering it improves recall. Enabling `include_search_results` is useful for debugging retrieval, but it increases the response payload.
 
+### Anthropic (Claude)
+
+When `provider: "anthropic"`, set the model under the `anthropic` block:
+
+```yaml
+provider: "anthropic"
+
+anthropic:
+  model: "claude-opus-4-8"
+```
+
+Claude reads the PDF directly (sent as a document in the request), so there is no vector store and the `rag.max_num_results`, `rag.include_search_results`, and `rag.vector_store_expires_after_days` settings do not apply. The shared `ui` and `rag` knobs still apply:
+
+- `ui.reasoning_effort` maps to Claude's thinking: `"none"` disables thinking, and `low`/`medium`/`high`/`xhigh` enable adaptive thinking at the corresponding effort.
+- `ui.max_output_tokens` caps the response (requests stream, so large values are supported).
+- `rag.max_quotes_per_category` bounds the structured JSON response, and the same `matching.*` settings align quotes to PDF word spans.
+
+Page numbers are returned as a field in the structured JSON (citations and structured output cannot be combined in the Messages API), keeping the output identical to the OpenAI path.
+
+### Quote matching
+
 The highlighter first tries exact and fuzzy contiguous matching. If those fail, it can fall back to `layout-gap` matching for quotes split by page layout interruptions such as tables, figures, captions, or column breaks. Layout-gap matches highlight only the words that belong to the quote and skip intervening layout artifacts.
 
 ## Brief History
@@ -190,6 +221,7 @@ The highlighter first tries exact and fuzzy contiguous matching. If those fail, 
 - v3.2.20260527: Updated default model to GPT-5.4 mini and added file-search tuning options.
 - v3.3.20260527: Added local quote span alignment for more accurate PDF highlights.
 - v3.4.20260528: Added layout-gap quote matching for quotes split by tables, figures, captions, or column breaks; added quote-match reports, stage-level CLI progress, concise default CLI output with verbose diagnostics, package metadata, CLI validation improvements, and the `PAPERFLUX_OPENAI_API_KEY` default for easier cost tracking.
+- v4.0.20260530: Added Anthropic (Claude) as a selectable LLM backend via a `provider` config key, alongside a pluggable provider registry. The Anthropic path reads the PDF directly (no vector store), returns the same structured JSON with page numbers, and maps `reasoning_effort` to adaptive thinking.
 
 ## Contributing
 

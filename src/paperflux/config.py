@@ -20,6 +20,12 @@ class OpenAIConfig(BaseModel):
     model: str
 
 
+class AnthropicConfig(BaseModel):
+    """Anthropic (Claude) API configuration."""
+    api_key: str
+    model: str
+
+
 class UIConfig(BaseModel):
     """UI configuration."""
     detail_level: Literal["low", "medium", "high"] = "medium"
@@ -61,6 +67,9 @@ class RagConfig(BaseModel):
     category_prompt_file: str = "prompts/rag_category_prompt.j2"
     summary_prompt_file: str = "prompts/rag_summary_prompt.j2"
     category_system_prompt_file: str = "prompts/rag_category_system_prompt.txt"
+    category_system_prompt_file_anthropic: str = (
+        "prompts/rag_category_system_prompt_anthropic.txt"
+    )
     max_num_results: Optional[int] = Field(default=None, ge=1)
     max_quotes_per_category: int = Field(default=6, ge=1)
     include_search_results: bool = False
@@ -71,11 +80,23 @@ class Config(BaseModel):
     """Main configuration."""
     _config_dir: Optional[Path] = PrivateAttr(default=None)
 
-    openai: OpenAIConfig
+    provider: Literal["openai", "anthropic"] = "openai"
+    openai: Optional[OpenAIConfig] = None
+    anthropic: Optional[AnthropicConfig] = None
     ui: UIConfig
     extraction_categories: ExtractionCategoriesConfig = Field(default_factory=ExtractionCategoriesConfig)
     matching: MatchingConfig = Field(default_factory=MatchingConfig)
     rag: RagConfig = Field(default_factory=RagConfig)
+
+    @model_validator(mode="after")
+    def validate_provider_config(self) -> "Config":
+        """Ensure the selected provider's config block is present."""
+        if getattr(self, self.provider, None) is None:
+            raise ValueError(
+                f"provider is '{self.provider}' but no '{self.provider}' "
+                "configuration block was provided."
+            )
+        return self
 
     @classmethod
     def _missing_highlight_categories(
@@ -97,6 +118,10 @@ class Config(BaseModel):
                 "Highlight colors missing for categories: " + ", ".join(sorted(missing))
             )
         return self
+
+
+# Provider-specific config blocks; only the selected provider's block is used.
+_PROVIDER_CONFIG_KEYS = ("openai", "anthropic")
 
 
 def _expand_env_vars(value: str) -> str:
@@ -138,6 +163,14 @@ def load(config_path: Union[str, Path]) -> Config:
 
     with open(config_path, "r") as f:
         config_dict = yaml.safe_load(f)
+
+    # Drop config blocks for non-selected providers so their ENV: references
+    # (e.g. an unused OpenAI key) are not required when another provider is active.
+    if isinstance(config_dict, dict):
+        selected_provider = config_dict.get("provider", "openai")
+        for name in _PROVIDER_CONFIG_KEYS:
+            if name != selected_provider:
+                config_dict.pop(name, None)
 
     # Process environment variables
     config_dict = _process_config_dict(config_dict)

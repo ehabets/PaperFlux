@@ -21,9 +21,9 @@ async def run_pipeline(
     progress_callback: Optional[ProgressCallback] = None,
 ) -> Tuple[Path, Path, Path, Path]:
     """
-    Run the complete pipeline on a PDF file via the Responses API.
+    Run the complete pipeline on a PDF file via the configured LLM provider.
     """
-    # Invoke the OpenAI analysis workflow.
+    # Invoke the configured provider's analysis workflow (OpenAI or Anthropic).
     result = await analyze_pdf(pdf_path, cfg, progress_callback=progress_callback)
     md_note = result["key_takeaways"]
     quotes = result["quotes"]
