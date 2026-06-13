@@ -119,6 +119,7 @@ paperflux --config config.yaml --quotes-file your_paper_quotes.json path/to/your
 - `--output-dir`, `-o`: Directory where annotated PDFs and summaries will be saved
 - `--progress/--no-progress`: Show or hide stage-level progress updates with elapsed time (default: shown)
 - `--quotes-file`: Path to JSON quotes file to annotate without rerunning extraction
+- `--version`, `-V`: Show the PaperFlux version and exit
 
 Use `paperflux init [directory]` to create a starter `config.yaml` and editable prompt templates in `prompts/`. Existing files are not overwritten unless you pass `--force`.
 
@@ -222,6 +223,7 @@ The highlighter first tries exact and fuzzy contiguous matching. If those fail, 
 - v3.3.20260527: Added local quote span alignment for more accurate PDF highlights.
 - v3.4.20260528: Added layout-gap quote matching for quotes split by tables, figures, captions, or column breaks; added quote-match reports, stage-level CLI progress, concise default CLI output with verbose diagnostics, package metadata, CLI validation improvements, and the `PAPERFLUX_OPENAI_API_KEY` default for easier cost tracking.
 - v4.0.20260530: Added Anthropic (Claude) as a selectable LLM backend via a `provider` config key, alongside a pluggable provider registry. The Anthropic path reads the PDF directly (no vector store), returns the same structured JSON with page numbers, and maps `reasoning_effort` to adaptive thinking.
+- v4.1.20260613: Added a `--version`/`-V` CLI flag that reports the installed package version.
 
 ## Contributing
 

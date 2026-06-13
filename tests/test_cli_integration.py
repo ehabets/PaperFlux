@@ -444,6 +444,17 @@ def test_console_entrypoint_preserves_legacy_run_invocation():
     ]
     assert cli._entrypoint_args(["init"]) == ["init"]
     assert cli._entrypoint_args(["--help"]) == ["--help"]
+    assert cli._entrypoint_args(["--version"]) == ["--version"]
+    assert cli._entrypoint_args(["-V"]) == ["-V"]
+
+
+def test_version_flag_reports_package_version():
+    from paperflux import __version__
+
+    for flag in ("--version", "-V"):
+        result = CliRunner().invoke(cli.app, [flag])
+        assert result.exit_code == 0, result.output
+        assert result.output.strip() == f"PaperFlux {__version__}"
 
 
 def test_quote_match_report_prints_details_only_when_verbose(tmp_path, capsys):

@@ -13,11 +13,13 @@ from typing import List, Optional
 import typer
 from pydantic import ValidationError
 
+from . import __version__
 from .config import Config, load
 from .orchestrator import batch_process
 
 app = typer.Typer(add_completion=False)
 _COMMANDS = {"run", "init"}
+_VERSION_FLAGS = {"--version", "-V"}
 _INIT_TEMPLATE_FILES = (
     ("config.yaml", "config.yaml"),
     ("prompts/rag_category_prompt.j2", "prompts/rag_category_prompt.j2"),
@@ -52,7 +54,12 @@ def _format_plural(count: int, singular: str, plural: Optional[str] = None) -> s
 
 
 def _entrypoint_args(args: List[str]) -> List[str]:
-    if args and args[0] not in _COMMANDS and args[0] not in {"--help", "-h"}:
+    if (
+        args
+        and args[0] not in _COMMANDS
+        and args[0] not in {"--help", "-h"}
+        and args[0] not in _VERSION_FLAGS
+    ):
         return ["run", *args]
     return args
 
@@ -198,6 +205,26 @@ def _write_init_templates(target_dir: Path, *, force: bool = False) -> None:
     for source, destination in planned_files:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"PaperFlux {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        help="Show the PaperFlux version and exit.",
+        callback=_version_callback,
+        is_eager=True,
+    ),
+) -> None:
+    """PaperFlux — AI-powered PDF annotation for research papers."""
 
 
 @app.command()
