@@ -1,6 +1,10 @@
 """
 Configuration management for PaperFlux.
-Handles loading YAML configuration and converting to Pydantic models.
+
+Defines Pydantic models for all configuration sections and provides
+:func:`load` to parse a YAML file into a validated :class:`Config` object.
+String values prefixed with ``ENV:`` are resolved from environment variables
+at load time.
 """
 
 import os
@@ -27,7 +31,7 @@ class AnthropicConfig(BaseModel):
 
 
 class UIConfig(BaseModel):
-    """UI configuration."""
+    """Display and inference settings that control output verbosity, reasoning depth, and highlight colors."""
     detail_level: Literal["low", "medium", "high"] = "medium"
     reasoning_effort: Literal["none", "low", "medium", "high", "xhigh"] = "medium"
     verbosity: Literal["low", "medium", "high"] = "medium"
@@ -43,8 +47,8 @@ class UIConfig(BaseModel):
 
 
 class ExtractionCategoriesConfig(BaseModel):
-    """Configuration for categories to extract quotes for."""
-    # Allows arbitrary category names (keys) and their descriptions (values)
+    """Named categories used to guide quote extraction, mapping each name to a natural-language description."""
+
     categories: Dict[str, str] = Field(
         default_factory=lambda: {
             "contributions": "Significant advancements, novel methods, or key findings presented in the paper.",
@@ -77,7 +81,7 @@ class RagConfig(BaseModel):
 
 
 class Config(BaseModel):
-    """Main configuration."""
+    """Root configuration object, assembled from all sub-section models."""
     _config_dir: Optional[Path] = PrivateAttr(default=None)
 
     provider: Literal["openai", "anthropic"] = "openai"
@@ -125,7 +129,11 @@ _PROVIDER_CONFIG_KEYS = ("openai", "anthropic")
 
 
 def _expand_env_vars(value: str) -> str:
-    """Expand environment variables in string values."""
+    """Resolve an ``ENV:<VAR>`` sentinel to the value of the named environment variable.
+
+    Values that do not start with the ``ENV:`` prefix are returned unchanged.
+    Raises ``ValueError`` if the referenced variable is not set.
+    """
     if isinstance(value, str) and value.startswith("ENV:"):
         env_var = value[4:]
         if env_var not in os.environ:
@@ -138,7 +146,7 @@ def _expand_env_vars(value: str) -> str:
 
 
 def _process_config_dict(config_dict: dict) -> dict:
-    """Process configuration dictionary to expand environment variables."""
+    """Recursively walk a config dict and resolve all ``ENV:`` sentinels in string values."""
     for key, value in config_dict.items():
         if isinstance(value, dict):
             config_dict[key] = _process_config_dict(value)
@@ -148,14 +156,24 @@ def _process_config_dict(config_dict: dict) -> dict:
 
 
 def load(config_path: Union[str, Path]) -> Config:
-    """
-    Load configuration from YAML file.
-    
+    """Load and validate a YAML configuration file.
+
+    Provider-specific blocks for inactive providers are discarded before
+    environment-variable resolution so that credentials for unused providers
+    need not be present. The returned object's ``_config_dir`` private
+    attribute is set to the directory containing the file, for use when
+    resolving relative paths (e.g. prompt template files).
+
     Args:
-        config_path: Path to configuration file
-        
+        config_path: Path to the YAML configuration file.
+
     Returns:
-        Config: Pydantic model of configuration
+        Fully validated configuration object.
+
+    Raises:
+        FileNotFoundError: If no file exists at ``config_path``.
+        ValueError: If a required ``ENV:`` variable is unset or a required
+            config section is missing or invalid.
     """
     config_path = Path(config_path)
     if not config_path.exists():
@@ -164,18 +182,14 @@ def load(config_path: Union[str, Path]) -> Config:
     with open(config_path, "r") as f:
         config_dict = yaml.safe_load(f)
 
-    # Drop config blocks for non-selected providers so their ENV: references
-    # (e.g. an unused OpenAI key) are not required when another provider is active.
     if isinstance(config_dict, dict):
         selected_provider = config_dict.get("provider", "openai")
         for name in _PROVIDER_CONFIG_KEYS:
             if name != selected_provider:
                 config_dict.pop(name, None)
 
-    # Process environment variables
     config_dict = _process_config_dict(config_dict)
 
-    # Convert to Pydantic model
     cfg = Config(**config_dict)
     cfg._config_dir = config_path.parent
     return cfg

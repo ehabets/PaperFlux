@@ -12,6 +12,7 @@ from .utils import finalize_output
 from .assistants import analyze_pdf
 
 ProgressCallback = Callable[[str], None]
+"""Signature for stage-level progress notification callbacks."""
 
 
 async def run_pipeline(
@@ -20,10 +21,23 @@ async def run_pipeline(
     output_dir: Optional[Path] = None,
     progress_callback: Optional[ProgressCallback] = None,
 ) -> Tuple[Path, Path, Path, Path]:
+    """Run the complete pipeline on a single PDF file.
+
+    Delegates to the LLM provider configured in *cfg* to extract key takeaways
+    and quotes, then writes all output artefacts via :func:`finalize_output`.
+
+    Args:
+        pdf_path: Path to the PDF file to process.
+        cfg: Application configuration, including the active LLM provider.
+        output_dir: Directory where output files are written. Defaults to the
+            same directory as *pdf_path* when omitted.
+        progress_callback: Optional callable invoked with a short status string
+            at each major pipeline stage.
+
+    Returns:
+        A four-tuple of paths: the source PDF copy, the markdown notes file,
+        the extracted quotes JSON, and the quote-match report JSON.
     """
-    Run the complete pipeline on a PDF file via the configured LLM provider.
-    """
-    # Invoke the configured provider's analysis workflow (OpenAI or Anthropic).
     result = await analyze_pdf(pdf_path, cfg, progress_callback=progress_callback)
     md_note = result["key_takeaways"]
     quotes = result["quotes"]
@@ -49,16 +63,20 @@ async def batch_process(
     Process multiple PDF files in sequence.
     
     Args:
-        pdf_paths: List of paths to PDF files
-        cfg: Application configuration
-        verbose: Whether to enable verbose logging
-        output_dir: Optional directory where output files should be saved.
-        show_progress: Whether to emit progress updates.
-        progress_callback: Optional callback for stage-level progress updates.
-        
+        pdf_paths: PDF files to process, handled one at a time in order.
+        cfg: Application configuration, including the active LLM provider.
+        verbose: Enables DEBUG-level logging and writes a per-PDF log file
+            alongside each input file.
+        output_dir: Directory where output files are written. Defaults to each
+            PDF's own directory when omitted.
+        show_progress: When False, suppresses all progress callback calls even
+            if *progress_callback* is provided.
+        progress_callback: Optional callable invoked with a short status string
+            at each major pipeline stage.
+
     Returns:
-        List[Tuple[Path, Path, Path, Path]]: List of output paths
-            (PDF, markdown, quotes JSON, quote-match report JSON)
+        One four-tuple per input PDF: the source PDF copy, the markdown notes
+        file, the extracted quotes JSON, and the quote-match report JSON.
     """
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)

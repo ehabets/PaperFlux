@@ -35,10 +35,11 @@ _UNSUPPORTED_SCHEMA_KEYS = ("maxItems", "minimum", "maximum", "minItems")
 
 
 def _strip_unsupported_schema_keys(node: Any) -> None:
-    """Recursively drop schema keywords Anthropic structured outputs reject.
+    """Recursively remove schema keywords unsupported by Anthropic structured outputs.
 
-    The ``at most N quotes`` / ``1-indexed pages`` constraints are also stated in
-    the prompt text, so removing the JSON-Schema equivalents preserves behavior.
+    Constraints encoded in the stripped keywords (quote limits, page ranges) are
+    also expressed in the prompt text, so dropping them from the schema does not
+    change enforced behavior.
     """
     if isinstance(node, dict):
         for key in _UNSUPPORTED_SCHEMA_KEYS:
@@ -51,6 +52,7 @@ def _strip_unsupported_schema_keys(node: Any) -> None:
 
 
 def _anthropic_safe_schema(max_quotes_per_category: int) -> dict:
+    """Return a deep copy of the multi-category schema with unsupported keywords stripped."""
     schema = copy.deepcopy(multi_category_schema(max_quotes_per_category))
     _strip_unsupported_schema_keys(schema)
     return schema
@@ -101,13 +103,34 @@ class AnthropicProvider:
         cfg: Config,
         progress_callback: Optional[ProgressCallback] = None,
     ) -> dict:
+        """Extract quotes and a summary from a PDF using the Anthropic Messages API.
+
+        The PDF is sent as a base64-encoded document block so Claude reads it
+        natively.  Two streaming requests are made: the first extracts per-category
+        quotes with structured JSON output; the second synthesizes a free-text
+        summary from those category-level results.
+
+        Args:
+            path: Local path to the PDF file to analyze.
+            cfg: Resolved application configuration, including model selection,
+                token limits, and extraction settings.
+            progress_callback: Optional callable that receives a human-readable
+                status string at key stages of processing.
+
+        Returns:
+            A dict with keys ``"key_takeaways"`` (str) and ``"quotes"`` (list).
+
+        Raises:
+            ValueError: If a model response is truncated, refused, missing text
+                output, or contains malformed JSON.
+        """
         client = AsyncAnthropic(api_key=cfg.anthropic.api_key)
 
         if progress_callback:
             progress_callback(f"Reading and encoding {path.name}")
         pdf_b64 = base64.standard_b64encode(path.read_bytes()).decode("utf-8")
 
-        categories = cfg.extraction_categories.categories  # Dict[name, description]
+        categories = cfg.extraction_categories.categories
         category_template = load_template(
             resolve_config_path(cfg.rag.category_prompt_file, cfg)
         )
@@ -192,7 +215,6 @@ class AnthropicProvider:
 
         quotes, category_summaries = normalize_category_bundle(result)
 
-        # Synthesize the global summary (plain text, no document).
         summary_template = load_template(
             resolve_config_path(cfg.rag.summary_prompt_file, cfg)
         )

@@ -58,6 +58,7 @@ def load_template(template_path: Union[str, Path]):
 
 
 def load_text_file(path: Union[str, Path]) -> str:
+    """Read a UTF-8 text file and return its contents with leading/trailing whitespace stripped."""
     with open(path, "r", encoding="utf-8") as handle:
         return handle.read().strip()
 

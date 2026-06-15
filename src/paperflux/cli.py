@@ -33,7 +33,11 @@ _INIT_TEMPLATE_FILES = (
 
 
 def _apply_cli_overrides(cfg: Config, *, detail: Optional[str] = None) -> Config:
-    """Apply CLI overrides by re-validating the Pydantic config model."""
+    """Return a new Config with any provided CLI flag values applied.
+
+    Re-validates through the Pydantic model so that downstream code sees a
+    fully consistent config object regardless of which values were overridden.
+    """
     if detail is None:
         return cfg
 
@@ -45,15 +49,22 @@ def _apply_cli_overrides(cfg: Config, *, detail: Optional[str] = None) -> Config
 
 
 def _echo_section(title: str) -> None:
+    """Print a blank line followed by a section title."""
     typer.echo()
     typer.echo(title)
 
 
 def _format_plural(count: int, singular: str, plural: Optional[str] = None) -> str:
+    """Return a count with the correctly inflected noun (e.g. "1 file", "3 files")."""
     return f"{count} {singular if count == 1 else plural or singular + 's'}"
 
 
 def _entrypoint_args(args: List[str]) -> List[str]:
+    """Prepend the implicit "run" subcommand when no subcommand is given.
+
+    Allows callers to write ``paperflux paper.pdf -c config.yaml`` instead of
+    the explicit ``paperflux run paper.pdf -c config.yaml``.
+    """
     if (
         args
         and args[0] not in _COMMANDS
@@ -65,6 +76,7 @@ def _entrypoint_args(args: List[str]) -> List[str]:
 
 
 def _format_elapsed(seconds: float) -> str:
+    """Format an elapsed duration as H:MM:SS or MM:SS."""
     total_seconds = max(0, int(seconds))
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
@@ -74,6 +86,8 @@ def _format_elapsed(seconds: float) -> str:
 
 
 class _StageProgress:
+    """Callable progress reporter that prefixes each message with elapsed time."""
+
     def __init__(self) -> None:
         self._started_at = time.monotonic()
 
@@ -89,6 +103,7 @@ def _echo_run_context(
     output_dir: Optional[Path],
     quotes_path: Optional[Path],
 ) -> None:
+    """Print the run header summarising inputs and the selected processing mode."""
     typer.echo("PaperFlux")
     _echo_section("Input")
     typer.echo(f"- Config: {config_path}")
@@ -114,6 +129,7 @@ def _echo_output_paths(
     quotes_out: Path,
     match_report_out: Path,
 ) -> None:
+    """Print the paths of all files produced for a single PDF."""
     _echo_section("Outputs")
     typer.echo(f"- Annotated PDF: {pdf_out}")
     typer.echo(f"- Markdown summary: {md_out}")
@@ -188,6 +204,10 @@ def _echo_quote_match_report(report_path: Path, *, verbose: bool = False) -> Non
 
 
 def _write_init_templates(target_dir: Path, *, force: bool = False) -> None:
+    """Copy the bundled starter config and prompt templates into target_dir.
+
+    Exits with code 1 when any destination file already exists and force is False.
+    """
     template_root = files("paperflux").joinpath("templates")
     planned_files = [
         (template_root.joinpath(source), target_dir / destination)
@@ -208,6 +228,7 @@ def _write_init_templates(target_dir: Path, *, force: bool = False) -> None:
 
 
 def _version_callback(value: bool) -> None:
+    """Print the version string and exit when --version/-V is passed."""
     if value:
         typer.echo(f"PaperFlux {__version__}")
         raise typer.Exit()
@@ -253,10 +274,15 @@ def main(
     progress: bool = typer.Option(True, "--progress/--no-progress", help="Show stage-level progress updates"),
     quotes_file: Optional[str] = typer.Option(None, "--quotes-file", help="Path to JSON quotes file to annotate without rerunning extraction"),
 ):
+    """Analyze one or more PDF files and produce annotated PDFs and markdown summaries.
+
+    Loads config from the given YAML file, optionally overrides the detail level,
+    then runs extraction and annotation for each PDF. When --quotes-file is
+    supplied, the extraction stage is skipped and the saved quotes are annotated
+    directly onto the single input PDF.
     """
-    Analyze one or more PDF files and produce annotated PDFs and markdown summaries.
-    """
-    # Configure logging before any other imports or logic.
+    # Logging must be configured before the orchestrator or any provider code
+    # runs so that DEBUG output from those modules is captured from the start.
     log_level = logging.DEBUG if verbose else logging.ERROR
     logging.basicConfig(
         level=log_level,
@@ -264,15 +290,13 @@ def main(
         force=True,
     )
 
-    # Convert to absolute paths
     config_path = Path(os.path.abspath(config))
     pdf_paths = [Path(os.path.abspath(pdf)) for pdf in pdfs]
-    
+
     if not config_path.exists():
         typer.echo(f"Configuration file {config_path} does not exist.")
         raise typer.Exit(code=1)
-    
-    # Verify PDF files exist
+
     for pdf_path in pdf_paths:
         if not pdf_path.exists():
             typer.echo(f"PDF file {pdf_path} does not exist.")
@@ -369,7 +393,7 @@ def main(
         raise typer.Exit(code=1)
 
 def run() -> None:
-    """Console script entry point."""
+    """Launch the PaperFlux CLI, injecting the implicit "run" subcommand when needed."""
     args = _entrypoint_args(sys.argv[1:])
     if args != sys.argv[1:]:
         original_argv = sys.argv[:]

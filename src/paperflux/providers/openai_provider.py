@@ -22,10 +22,12 @@ logger = logging.getLogger(__name__)
 
 
 def _build_text_payload(format_payload: dict, verbosity: str) -> dict:
+    """Build the ``text`` parameter dict for a Responses API call."""
     return {"format": format_payload, "verbosity": verbosity}
 
 
 def _reasoning_payload(effort: str) -> Dict[str, str]:
+    """Build the ``reasoning`` parameter dict for a Responses API call."""
     return {"effort": effort}
 
 
@@ -100,6 +102,23 @@ class OpenAIProvider:
         cfg: Config,
         progress_callback: Optional[ProgressCallback] = None,
     ) -> dict:
+        """Analyze a PDF and return extracted quotes and a summary.
+
+        Uploads the PDF to a temporary OpenAI vector store, runs a bundled
+        category-extraction call with file_search, then synthesizes a global
+        summary. The vector store is deleted in a ``finally`` block regardless
+        of outcome.
+
+        Args:
+            path: Path to the PDF file to analyze.
+            cfg: Loaded PaperFlux configuration.
+            progress_callback: Optional callable invoked with a status string
+                at each major pipeline stage.
+
+        Returns:
+            A dict with keys ``"key_takeaways"`` (str) and ``"quotes"``
+            (Dict[category_name, list]).
+        """
         client_sync = OpenAI(api_key=cfg.openai.api_key)
         vector_store_id: Optional[str] = None
 

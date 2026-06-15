@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class _QuotePayload:
+    """Normalised representation of a single quote extracted from an LLM response."""
+
     text: str
     pages: List[int]
     prefix: str = ""
@@ -87,15 +89,15 @@ def annotate_pdf(
         output_dir: Optional directory where the annotated PDF should be saved
 
     Returns:
-        Tuple[Path, Dict[str, Any]]: Path to annotated PDF file and quote match report
+        The path of the saved annotated PDF and a match report summarising how
+        many quotes were located, highlighted, or skipped.
     """
-    # Get colors from config if not explicitly provided
     if colors is None and cfg is not None and hasattr(cfg, "ui") and hasattr(cfg.ui, "highlight_colors"):
         colors = cfg.ui.highlight_colors
     
     if not colors:
         logger.warning("No highlight colors provided or found in config")
-        colors = {}  # Default to empty dict to avoid errors
+        colors = {}
     min_similarity = 0.88
     max_window_tokens = 80
     word_cache: Dict[int, List[List[Any]]] = {}
@@ -116,7 +118,6 @@ def annotate_pdf(
     doc = fitz.open(path)
     logger.info(f"PDF has {len(doc)} pages")
     
-    # Add sticky note to first page
     first_page = doc[0]
     logger.debug(f"Adding sticky note with {len(note_md)} characters")
     logger.debug(f"Note content preview: {note_md[:100]}...")
@@ -244,7 +245,6 @@ def annotate_pdf(
         "records": quote_match_records,
     }
     
-    # Save the annotated PDF
     stem = path.stem
     target_dir = output_dir if output_dir else path.parent
     if output_dir:
@@ -266,12 +266,12 @@ def save_markdown(path: Path, content: str, output_dir: Optional[Path] = None) -
     Save markdown content to a file.
     
     Args:
-    path: Path to PDF file (used to generate markdown filename)
-        content: Markdown content
-    output_dir: Optional directory where the markdown file should be saved
+        path: Path to the source PDF; its stem is used to derive the output filename.
+        content: Markdown content to write.
+        output_dir: Directory where the markdown file should be saved.
         
     Returns:
-        Path: Path to markdown file
+        Path to the written markdown file.
     """
     stem = path.stem
     target_dir = output_dir if output_dir else path.parent
