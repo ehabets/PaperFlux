@@ -316,7 +316,7 @@ def test_cli_full_pipeline_with_mocked_openai_and_tiny_pdf(tmp_path, monkeypatch
     assert "contributions" in response_requests[0]["input"][1]["content"]
     assert "Input" in result.output
     assert "Processing" in result.output
-    assert "[1/1] Processing paper.pdf" in result.output
+    assert "Processing paper.pdf" in result.output
     assert "Creating temporary vector store" in result.output
     assert "Uploading and indexing paper.pdf" in result.output
     assert "Extracting quotes with OpenAI" in result.output

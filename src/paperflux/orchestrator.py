@@ -86,7 +86,8 @@ async def batch_process(
     for index, pdf_path in enumerate(pdf_paths, start=1):
         emit_progress = progress_callback if show_progress else None
         if emit_progress:
-            emit_progress(f"[{index}/{total}] Processing {pdf_path.name}")
+            prefix = f"[{index}/{total}] " if total > 1 else ""
+            emit_progress(f"{prefix}Processing {pdf_path.name}")
         handler = None
         if verbose:
             log_file = pdf_path.with_suffix('.log')

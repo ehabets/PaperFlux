@@ -107,9 +107,10 @@ def _echo_run_context(
     typer.echo("PaperFlux")
     _echo_section("Input")
     typer.echo(f"- Config: {config_path}")
-    typer.echo(f"- PDFs: {_format_plural(len(pdf_paths), 'file')}")
     if len(pdf_paths) == 1:
         typer.echo(f"- PDF: {pdf_paths[0]}")
+    else:
+        typer.echo(f"- PDFs: {_format_plural(len(pdf_paths), 'file')}")
     if quotes_path:
         typer.echo("- Mode: annotate from saved quotes")
         typer.echo(f"- Quotes file: {quotes_path}")
@@ -372,7 +373,8 @@ def main(
         quotes_path=None,
     )
     _echo_section("Processing")
-    typer.echo(f"- Processing {_format_plural(len(pdf_paths), 'PDF')}")
+    if len(pdf_paths) > 1:
+        typer.echo(f"- Processing {_format_plural(len(pdf_paths), 'PDF')}")
     progress_reporter = _StageProgress() if progress else None
     try:
         results = asyncio.run(
